@@ -1,5 +1,5 @@
 {
-	"name": "yours-fanny",
+	"name": "yetzer",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -18,7 +18,7 @@
 		"react-router": "^8.4.0"
 	},
 	"devDependencies": {
-		"@cloudflare/vite-plugin": "^1.57.3",
+		"@cloudflare/vite-plugin": "^1.62.3",
 		"@react-router/dev": "^8.4.0",
 		"@tailwindcss/vite": "^4.2.2",
 		"@types/node": "^22",
@@ -27,6 +27,6 @@
 		"tailwindcss": "^4.2.2",
 		"typescript": "^5.9.3",
 		"vite": "^8.0.3",
-		"wrangler": "^4.136.3"
+		"wrangler": "^4.145.0"
 	}
 }
