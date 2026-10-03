@@ -1,79 +1,17 @@
-# Welcome to React Router!
+# Yetzer
 
-A modern, production-ready template for building full-stack React applications using React Router.
+Yetzer is a daily, paid creative video quest app running on Cloudflare Workers. Five quests are drawn from an immutable pool of 220 each New York day. A completed purchase permits one generation; the creator may download the result, while public results expire after 47 hours.
 
-## Features
+The app uses React Router, D1 for accounts, quests, orders and generation records, private R2 for uploaded and generated media, and a Cloudflare Workflow for asynchronous generation. See [APP.md](../APP.md) for product rules and operations.
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
+## Local checks
 
-## Getting Started
-
-### Installation
-
-Install the dependencies:
-
-```bash
-npm install
-```
-
-### Development
-
-Start the development server with HMR:
-
-```bash
-npm run dev
-```
-
-Your application will be available at `http://localhost:5173`.
-
-## Previewing the Production Build
-
-Preview the production build locally:
-
-```bash
-npm run preview
-```
-
-## Building for Production
-
-Create a production build:
-
-```bash
-npm run build
-```
+From this directory, run `pnpm install`, `pnpm typecheck`, `node --test scripts/*.test.mjs`, `pnpm exec tsx --test scripts/rules.test.ts`, and `pnpm build`. These checks do not call AI models or perform payments. Do not use localhost to validate this app.
 
 ## Deployment
 
-Deployment is done using the Wrangler CLI.
+`wrangler.jsonc` defines the Worker, D1 database, R2 bucket, Workflow, and cron. Apply migrations with `pnpm exec wrangler d1 migrations apply yetzer-db --remote` and deploy with `pnpm exec wrangler deploy`. Run `node scripts/prepare-assets.mjs` before building if the supplied `../yetzer.svg` changes.
 
-To build and deploy directly to production:
+The private `.env` holds `YETZER_JWT_SECRET` and `YETZER_PASSWORD_PEPPER`. Both must be 32 random bytes encoded as 64 hex characters and uploaded as Worker secrets; never commit or print their values. The same values must remain consistent across deployments. Sales stay disabled until `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `OPENROUTER_API_KEY`, a correct `APP_URL`, and approved prices are configured and payment/provider flows have been verified. The browser must never receive these secrets.
 
-```sh
-npm run deploy
-```
-
-To deploy a preview URL:
-
-```sh
-npx wrangler versions upload
-```
-
-You can then promote a version to production after verification or roll it out progressively.
-
-```sh
-npx wrangler versions deploy
-```
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
-
----
-
-Built with ❤️ using React Router.
+The `/schedule` page publishes the New York opening, purchase, submission, and expiry windows. Do not treat a successful build or deploy as proof that paid generation works end to end.

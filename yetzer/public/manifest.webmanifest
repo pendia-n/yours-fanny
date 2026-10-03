@@ -1,0 +1,12 @@
+{
+  "id": "/", "name": "Yetzer", "short_name": "Yetzer",
+  "description": "Five daily invitations to make something wonderfully unlikely.",
+  "start_url": "/quests", "scope": "/", "display": "standalone",
+  "background_color": "#f3f7f8", "theme_color": "#3057d5",
+  "icons": [
+    {"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/icons/maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ],
+  "shortcuts": [{"name":"Today's quests","url":"/quests"},{"name":"My plays","url":"/plays"}]
+}

@@ -1,19 +1,9 @@
-import { env } from "cloudflare:workers";
-
+import { Link, redirect } from "react-router";
 import type { Route } from "./+types/home";
-import { Welcome } from "../welcome/welcome";
-
-export function meta({}: Route.MetaArgs) {
-  return [
-    { title: "New React Router App" },
-    { name: "description", content: "Welcome to React Router!" },
-  ];
-}
-
-export function loader() {
-  return { message: env.VALUE_FROM_CLOUDFLARE };
-}
-
-export default function Home({ loaderData }: Route.ComponentProps) {
-  return <Welcome message={loaderData.message} />;
+import { rootData } from "../lib/server.server";
+import { Icon } from "../root";
+export const meta=()=>[{title:"Yetzer | Your ordinary day. Plot twist included."},{name:"description",content:"Five daily creative quests. Bring your own footage, photo or voice and turn a real moment into a playful short film."}];
+export async function loader({request}:Route.LoaderArgs) { const data=await rootData(request); if(data.user) throw redirect("/quests"); return data; }
+export default function Home({loaderData}:Route.ComponentProps) {
+  return <div className="page"><section className="hero"><div className="hero-copy"><div className="eyebrow"><span className="status-dot"/> THE DAILY CREATIVE PLAYGROUND</div><h1>Your ordinary day.<br/><span>Plot twist included.</span></h1><p className="lede">A photo. Your voice. A little performance.<br/>Bring something real. Make something wonderfully unlikely.</p><div className="button-row"><Link className="button" to="/quests">Find today's adventure <Icon name="arrow"/></Link><Link className="text-link" to="/about">How we play</Link></div><p className="fine-print">Five quests a day. No subscription. Your imagination does the leading.</p>{!loaderData.salesReady&&<p className="launch-note">Explore the quests now. Paid plays open when generation and payments are ready.</p>}</div><div className="hero-stage" aria-label="Illustration of a creative quest, not a generated user film"><div className="stage-orbit"/><div className="example-ticket"><div className="ticket-top"><span>AN EXAMPLE QUEST</span><Icon name="spark"/></div><div className="ticket-scene"><div className="paper-moon"/><div className="paper-cup"><span>?</span></div><div className="paper-star">+</div></div><h2>The pocket weather report</h2><p>Open your palm. Discover a little weather of your own.</p><div className="ticket-bottom"><span>YOU BRING THE MOMENT</span><Icon name="arrow"/></div></div><div className="stage-caption"><Icon name="play"/> You are not just the prompt.<br/><strong>You are part of the plot.</strong></div></div></section><section className="intro-strip"><div><span className="eyebrow">LESS SCROLLING. MORE MAKING.</span><h2>Not another empty prompt box.</h2></div><p>Pick a playful invitation, prepare your materials, and make one short film. The fun starts before the AI does.</p></section><section className="three-up"><article className="feature"><Icon name="spark" size={30}/><h3>A new invitation</h3><p>Five fresh selections every New York day. Small ideas you can actually try.</p></article><article className="feature"><Icon name="person" size={30}/><h3>Your part matters</h3><p>Your gesture, your voice, your strange little idea. Not a stranger generated in your place.</p></article><article className="feature"><Icon name="ticket" size={30}/><h3>One play, one film</h3><p>See the materials, transformation and full price before you buy. No credit arithmetic.</p></article></section><section className="closing-card"><div><span className="eyebrow">WHAT WILL YOU MAKE OF TODAY?</span><h2>Start with something ordinary.</h2></div><Link to="/quests" className="button">Open the quest board <Icon name="arrow"/></Link></section></div>;
 }

@@ -1,38 +1,21 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "yetzer",
-	"compatibility_date": "2026-09-26",
-	"main": "./workers/app.ts",
-	"vars": {
-		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
-	},
-	"observability": {
-		"enabled": true
-	},
-	"upload_source_maps": true
-	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-	 */
-	// "placement": {  "mode": "smart" }
-	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
-	/**
-	 * Static Assets
-	 * https://developers.cloudflare.com/workers/static-assets/binding/
-	 */
-	// "assets": {  "directory": "./public/",  "binding": "ASSETS" }
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yetzer",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./workers/app.ts",
+  "workers_dev": true,
+  "vars": {
+    "APP_URL": "https://yetzer.pendia-community.workers.dev",
+    "SALES_ENABLED": "false",
+    "SHORT_PRICE_CENTS": "999",
+    "LONG_PRICE_CENTS": "1499"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "yetzer-db", "database_id": "b4a10994-ea5e-4c8b-86c2-6feeed60a9c2", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "yetzer-media" }],
+  "workflows": [{ "name": "yetzer-generation", "binding": "GENERATION", "class_name": "GenerationWorkflow" }],
+  "triggers": { "crons": ["* * * * *"] },
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
+  "limits": { "cpu_ms": 30000 }
 }

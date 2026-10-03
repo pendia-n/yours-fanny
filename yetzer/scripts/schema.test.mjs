@@ -1,0 +1,16 @@
+import {readFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import assert from 'node:assert/strict';
+const schema=readFileSync('migrations/0001_initial.sql','utf8')+readFileSync('migrations/0002_quests.sql','utf8')+readFileSync('migrations/0003_daily_variations.sql','utf8');
+const run=sql=>execFileSync('sqlite3',[':memory:'],{input:schema+sql,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
+assert.equal(run('SELECT COUNT(*) FROM quest_templates;'),'220');
+assert.throws(()=>run("UPDATE quest_templates SET title='changed' WHERE id='edit-001';"),/base_quests_are_immutable/);
+const setup="INSERT INTO accounts(id,username,password_hash,created_at) VALUES('a','Test','not-a-real-hash',1); INSERT INTO daily_quests VALUES('q','2026-10-03','edit-001',0,'{}');";
+const purchase=(n,status='paid')=>`INSERT INTO purchases(id,account_id,quest_id,purchase_day,status,price_cents,created_at,expires_at) VALUES('p${n}','a','q','2026-10-03','${status}',999,1,9999999999999);`;
+assert.throws(()=>run(setup+[1,2,3,4].map(n=>purchase(n)).join('')),/daily_purchase_limit/);
+assert.equal(run(setup+[1,2,3].map(n=>purchase(n)).join('')+"UPDATE purchases SET status='expired' WHERE id='p1';"+purchase(4)+"SELECT COUNT(*) FROM purchases WHERE status='paid';"),'3');
+const generation="INSERT INTO generations(id,purchase_id,account_id,quest_id,submission_day,status,model,resolution,duration,raw_text,prompt,upload_ids,reference_token_hash,reference_expires_at,created_at) VALUES('g','p1','a','q','2026-10-03','queued','model','720p',12,'','','[]','test',99999,1);";
+assert.throws(()=>run(setup+purchase(1,'pending')+generation),/purchase_not_available/);
+assert.equal(run(setup+purchase(1)+generation+"SELECT status FROM purchases WHERE id='p1';"),'submitted');
+assert.throws(()=>run(setup+purchase(1)+generation+generation.replace("'g'","'g2'")),/purchase_not_available|UNIQUE/);
+console.log('7 offline SQLite schema/entitlement assertions passed. No app server or remote data used.');
