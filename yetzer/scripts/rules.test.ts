@@ -4,6 +4,8 @@ import {QUEST_CATALOG} from '../app/lib/quest-catalog';
 import {dailySelection,dayOffset,nyInstant,nyParts,pagePath,schedule,submissionDeadline,canSubmitPurchase,validPassword,validPasscode,validUsername,type Quest} from '../app/lib/domain';
 import {hashPassword,verifyPassword,signJwt,verifyJwt} from '../workers/crypto';
 import {inspectMedia,validateInputs,type Upload} from '../workers/media';
+import {videoRequest} from '../workers/video-request';
+import {serviceReadiness} from '../workers/quests';
 
 test('React Router data requests resolve to the same page as document requests',()=>{
  for(const path of ['/quests','/pricing','/about','/manifestation','/schedule','/security']){
@@ -55,6 +57,23 @@ test('route requirements and duration bounds reject unsuitable inputs',()=>{
  assert.throws(()=>validateInputs(quest('perform'),[upload('image')]));assert.equal(validateInputs(quest('perform'),[upload('image'),upload('audio')]).duration,12);
  assert.throws(()=>validateInputs(quest('imagine'),[upload('image')]));assert.throws(()=>validateInputs(quest('imagine'),[upload('video',30)]));
  assert.equal(validateInputs(quest('adventure'),[upload('video',30)]).duration,30);
+});
+test('all video routes submit supported request shapes without a paid generation',()=>{
+ for(const kind of ['edit','perform','imagine','adventure']){
+  const q=quest(kind);
+  const references=q.kind==='perform'
+   ? [{type:'image_url' as const,image_url:{url:'https://example.com/image'}},{type:'audio_url' as const,audio_url:{url:'https://example.com/audio'}}]
+   : [{type:'video_url' as const,video_url:{url:'https://example.com/video'}}];
+  const request=videoRequest({model:q.model,prompt:'test scene',duration:q.duration,resolution:q.resolution,aspectRatio:'16:9',references});
+  assert.equal(request.model,q.model);assert.equal(request.prompt,'test scene');assert.deepEqual(request.input_references,references);
+  if(q.kind==='edit')assert.ok(!('duration' in request) && !('resolution' in request) && !('aspect_ratio' in request));
+  else {assert.equal(request.duration,q.duration);assert.equal(request.resolution,q.resolution);assert.equal(request.aspect_ratio,'16:9');}
+ }
+});
+test('sales open only after both provider keys and Stripe webhook signing secret exist',()=>{
+ const vars={SALES_ENABLED:'true',OPENROUTER_API_KEY:'key',STRIPE_SECRET_KEY:'key',STRIPE_WEBHOOK_SECRET:'secret'} as Parameters<typeof serviceReadiness>[0];
+ assert.deepEqual(serviceReadiness(vars),{generationReady:true,paymentReady:true,salesReady:true});
+ assert.equal(serviceReadiness({...vars,STRIPE_WEBHOOK_SECRET:''}).salesReady,false);
 });
 test('server reads WAV duration from bytes and rejects unknown data',()=>{
  const b=Buffer.alloc(44+16000);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(8000,24);b.writeUInt32LE(16000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(16000,40);

@@ -5,7 +5,7 @@ import { HttpError, json, boundedText, type Account, type AppEnv } from "./types
 export type Purchase = { id: string; account_id: string; quest_id: string; purchase_day: string; status: string; price_cents: number; checkout_id: string | null; checkout_url: string | null; payment_intent: string | null; expires_at: number; created_at: number };
 export async function stripe(env: AppEnv, path: string, values?: Record<string, string>, idempotencyKey?: string) {
   if (!env.STRIPE_SECRET_KEY) throw new HttpError(503, "Payments are not available yet.");
-  const response = await fetch(`https://api.stripe.com/v1/${path}`, { method: values ? "POST" : "GET", headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, "Stripe-Version": "2026-08-26.dahlia", ...(values ? { "Content-Type": "application/x-www-form-urlencoded" } : {}), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: values ? new URLSearchParams(values) : undefined, signal: AbortSignal.timeout(20000) });
+  const response = await fetch(`https://api.stripe.com/v1/${path}`, { method: values ? "POST" : "GET", headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, ...(values ? { "Content-Type": "application/x-www-form-urlencoded" } : {}), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: values ? new URLSearchParams(values) : undefined, signal: AbortSignal.timeout(20000) });
   if (!response.ok) throw new HttpError(502, "Payment service is temporarily unavailable. Your purchase has not been granted.", "payment_service");
   return await response.json() as Record<string, any>;
 }
@@ -28,7 +28,7 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
     "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(quest.priceCents),
     "line_items[0][price_data][product_data][name]": `Yetzer: ${quest.title}`,
     "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.duration}-second target. Download within 47 hours of completion.`,
-    "line_items[0][quantity]": "1", expires_at: String(Math.floor(Date.now() / 1000) + 1800), integration_identifier: "yetzer-quest-lxqvnmra",
+    "line_items[0][quantity]": "1", expires_at: String(Math.floor(Date.now() / 1000) + 1800),
   }, `yetzer-checkout-${requestId}`);
   if (typeof session.url !== "string" || !session.url.startsWith("https://checkout.stripe.com/")) throw new HttpError(502, "Checkout did not return a usable link.");
   await env.DB.prepare("UPDATE purchases SET status='pending',checkout_id=?,checkout_url=? WHERE id=? AND status='reserved'").bind(session.id, session.url, requestId).run();

@@ -7,7 +7,7 @@
   "workers_dev": true,
   "vars": {
     "APP_URL": "https://yetzer.pendia-community.workers.dev",
-    "SALES_ENABLED": "false",
+    "SALES_ENABLED": "true",
     "SHORT_PRICE_CENTS": "999",
     "LONG_PRICE_CENTS": "1499"
   },

@@ -4,6 +4,7 @@ import { refundServiceFailure } from "./billing";
 import { digest, hmac, base64url } from "./crypto";
 import { inspectMp4, type Upload } from "./media";
 import type { AppEnv } from "./types";
+import { videoRequest, type VideoReference } from "./video-request";
 export type Generation = { id: string; purchase_id: string; account_id: string; quest_id: string; status: string; model: string; resolution: string; duration: number; prompt: string; upload_ids: string; provider_id: string | null; provider_submitted_at: number | null; r2_key: string | null; completed_at: number | null; expires_at: number | null; reference_expires_at: number; aspect?: string };
 export async function referenceToken(env: AppEnv, generationId: string) { return base64url(await hmac(`reference:${generationId}`, env.YETZER_JWT_SECRET)); }
 async function providerJson(env: AppEnv, path: string, body?: unknown) {
@@ -55,9 +56,9 @@ export class GenerationWorkflow extends WorkflowEntrypoint<AppEnv, { generationI
         const uploads: Upload[] = [];
         for (const uploadId of JSON.parse(current.upload_ids)) { const row = await this.env.DB.prepare("SELECT * FROM uploads WHERE id=? AND account_id=?").bind(uploadId,current.account_id).first<Upload>(); if (!row) throw new Error("source_missing"); uploads.push(row); }
         const token = await referenceToken(this.env,id);
-        const references = uploads.map(upload => ({ type: `${upload.kind}_url`, [`${upload.kind}_url`]: { url: `${this.env.APP_URL}/api/references/${id}/${upload.id}?token=${encodeURIComponent(token)}` } }));
+        const references = uploads.map(upload => ({ type: `${upload.kind}_url`, [`${upload.kind}_url`]: { url: `${this.env.APP_URL}/api/references/${id}/${upload.id}?token=${encodeURIComponent(token)}` } })) as VideoReference[];
         const video = uploads.find(u => u.kind === "video");
-        const result = await providerJson(this.env,"videos", { model: current.model, prompt: current.prompt, duration: current.duration, resolution: current.resolution, aspect_ratio: video && video.width! < video.height! ? "9:16" : "16:9", input_references: references });
+        const result = await providerJson(this.env,"videos",videoRequest({ model: current.model, prompt: current.prompt, duration: current.duration, resolution: current.resolution, aspectRatio: video && video.width! < video.height! ? "9:16" : "16:9", references }));
         if (!result.id) throw new Error("submission_ambiguous");
         await this.env.DB.prepare("UPDATE generations SET provider_id=?,provider_generation_id=?,status='provider_pending' WHERE id=?").bind(result.id,result.generation_id ?? null,id).run();
         return result.id;
