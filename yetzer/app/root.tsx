@@ -6,7 +6,7 @@ import type { Theme } from "./lib/domain";
 import "./app.css";
 export const loader = ({request}:Route.LoaderArgs)=>rootData(request);
 export const links:Route.LinksFunction=()=>[
-  {rel:"icon",href:"/favicon.ico",sizes:"any"}, {rel:"icon",href:"/yetzer.svg",type:"image/svg+xml"},
+  {rel:"icon",href:"/favicon.ico?v=3",sizes:"any"}, {rel:"icon",href:"/yetzer.svg?v=3",type:"image/svg+xml"},
   {rel:"apple-touch-icon",href:"/icons/apple-touch-icon.png"}, {rel:"manifest",href:"/manifest.webmanifest"},
   {rel:"preconnect",href:"https://fonts.googleapis.com"}, {rel:"preconnect",href:"https://fonts.gstatic.com",crossOrigin:"anonymous"},
   {rel:"stylesheet",href:"https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"},

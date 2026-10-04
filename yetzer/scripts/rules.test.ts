@@ -1,9 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {QUEST_CATALOG} from '../app/lib/quest-catalog';
-import {dailySelection,dayOffset,nyInstant,nyParts,schedule,submissionDeadline,canSubmitPurchase,validPassword,validPasscode,validUsername,type Quest} from '../app/lib/domain';
+import {dailySelection,dayOffset,nyInstant,nyParts,pagePath,schedule,submissionDeadline,canSubmitPurchase,validPassword,validPasscode,validUsername,type Quest} from '../app/lib/domain';
 import {hashPassword,verifyPassword,signJwt,verifyJwt} from '../workers/crypto';
 import {inspectMedia,validateInputs,type Upload} from '../workers/media';
+
+test('React Router data requests resolve to the same page as document requests',()=>{
+ for(const path of ['/quests','/pricing','/about','/manifestation','/schedule','/security']){
+  assert.equal(pagePath(`https://yetzer.example${path}`),path);
+  assert.equal(pagePath(`https://yetzer.example${path}.data`),path);
+ }
+ assert.equal(pagePath('https://yetzer.example/quests/abc.data'),'/quests/abc');
+});
 
 test('220 unique immutable-source recipes, 55 per route, practical preparation',()=>{
  assert.equal(QUEST_CATALOG.length,220);assert.equal(new Set(QUEST_CATALOG.map(q=>q.id)).size,220);assert.equal(new Set(QUEST_CATALOG.map(q=>q.title)).size,220);
