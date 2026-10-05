@@ -1,5 +1,11 @@
 import { dailySelection, ROUTES, schedule, type Quest, type QuestKind } from "../app/lib/domain";
 import { HttpError, type AppEnv } from "./types";
+export function currentPrice(env: AppEnv, kind: QuestKind) {
+  return Number(kind === "adventure" ? env.LONG_PRICE_CENTS : env.SHORT_PRICE_CENTS);
+}
+function withCurrentPrice(env: AppEnv, quest: Quest): Quest {
+  return { ...quest, priceCents: currentPrice(env, quest.kind) };
+}
 export function serviceReadiness(env: AppEnv) {
   const generationReady = !!env.OPENROUTER_API_KEY;
   const paymentReady = !!env.STRIPE_SECRET_KEY && !!env.STRIPE_WEBHOOK_SECRET;
@@ -8,15 +14,15 @@ export function serviceReadiness(env: AppEnv) {
 export async function ensureDaily(env: AppEnv, at = Date.now()) {
   const day = schedule(at).day;
   const existing = await env.DB.prepare("SELECT snapshot FROM daily_quests WHERE day=? ORDER BY position").bind(day).all<{ snapshot: string }>();
-  if (existing.results.length === 5) return existing.results.map(r => JSON.parse(r.snapshot) as Quest);
+  if (existing.results.length === 5) return existing.results.map(r => withCurrentPrice(env, JSON.parse(r.snapshot) as Quest));
   const owner = crypto.randomUUID(), now = Date.now();
   const lease = await env.DB.prepare("INSERT INTO daily_releases(day,owner,lease_until) VALUES(?,?,?) ON CONFLICT(day) DO UPDATE SET owner=excluded.owner,lease_until=excluded.lease_until WHERE daily_releases.lease_until<? AND daily_releases.finished=0 RETURNING owner").bind(day,owner,now+180000,now).first<{owner:string}>();
-  if (!lease) return existing.results.map(r => JSON.parse(r.snapshot) as Quest);
+  if (!lease) return existing.results.map(r => withCurrentPrice(env, JSON.parse(r.snapshot) as Quest));
   const pool = await env.DB.prepare("SELECT * FROM quest_templates ORDER BY id").all<{id:string;title:string;invitation:string;preparation:string;transformation:string;preserve:string;kind:QuestKind;duration:number}>();
   const selected = dailySelection(pool.results, day);
   const quests: Quest[] = [];
   for (const base of selected) {
-    const q: Quest = {...base,...ROUTES[base.kind],templateId:base.id,id:`${day}_${base.id}`,day,priceCents:Number(base.kind === "adventure" ? env.LONG_PRICE_CENTS : env.SHORT_PRICE_CENTS)};
+    const q: Quest = {...base,...ROUTES[base.kind],templateId:base.id,id:`${day}_${base.id}`,day,priceCents:currentPrice(env, base.kind)};
     const probability = crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
     await env.DB.prepare("INSERT OR IGNORE INTO daily_draws(day,template_id,probability) VALUES(?,?,?)").bind(day,base.id,probability).run();
     const draw = await env.DB.prepare("SELECT probability,attempted FROM daily_draws WHERE day=? AND template_id=?").bind(day,base.id).first<{probability:number;attempted:number}>();
@@ -32,7 +38,7 @@ export async function ensureDaily(env: AppEnv, at = Date.now()) {
   await env.DB.batch(quests.map((q, position) => env.DB.prepare("INSERT OR IGNORE INTO daily_quests(id,day,template_id,position,snapshot) VALUES(?,?,?,?,?)").bind(q.id, day, q.templateId, position, JSON.stringify(q))));
   await env.DB.prepare("UPDATE daily_releases SET finished=1 WHERE day=? AND owner=?").bind(day,owner).run();
   const saved = await env.DB.prepare("SELECT snapshot FROM daily_quests WHERE day=? ORDER BY position").bind(day).all<{ snapshot: string }>();
-  return saved.results.map(r => JSON.parse(r.snapshot) as Quest);
+  return saved.results.map(r => withCurrentPrice(env, JSON.parse(r.snapshot) as Quest));
 }
 async function questVariant(env: AppEnv, quest: Quest): Promise<{title:string;transformation:string}|null> {
   try {
@@ -52,7 +58,7 @@ async function questVariant(env: AppEnv, quest: Quest): Promise<{title:string;tr
 export async function getQuest(env: AppEnv, id: string) {
   const row = await env.DB.prepare("SELECT snapshot FROM daily_quests WHERE id=?").bind(id).first<{ snapshot: string }>();
   if (!row) throw new HttpError(404, "This quest was not found.");
-  return JSON.parse(row.snapshot) as Quest;
+  return withCurrentPrice(env, JSON.parse(row.snapshot) as Quest);
 }
 export function questPrompt(quest: Quest, rawText: string) {
   return [

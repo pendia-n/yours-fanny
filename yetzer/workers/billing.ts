@@ -27,7 +27,8 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
     client_reference_id: requestId, "metadata[purchase_id]": requestId,
     "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(quest.priceCents),
     "line_items[0][price_data][product_data][name]": `Yetzer: ${quest.title}`,
-    "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.duration}-second target. Download within 47 hours of completion.`,
+    "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.kind === "adventure" ? "15-30" : "10-15"}-second output. Download within 47 hours of completion.`,
+    "metadata[quest_title]": quest.title,
     "line_items[0][quantity]": "1", expires_at: String(Math.floor(Date.now() / 1000) + 1800),
   }, `yetzer-checkout-${requestId}`);
   if (typeof session.url !== "string" || !session.url.startsWith("https://checkout.stripe.com/")) throw new HttpError(502, "Checkout did not return a usable link.");

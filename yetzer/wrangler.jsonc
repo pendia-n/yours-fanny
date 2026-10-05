@@ -8,7 +8,7 @@
   "vars": {
     "APP_URL": "https://yetzer.pendia-community.workers.dev",
     "SALES_ENABLED": "true",
-    "SHORT_PRICE_CENTS": "999",
+    "SHORT_PRICE_CENTS": "699",
     "LONG_PRICE_CENTS": "1499"
   },
   "d1_databases": [{ "binding": "DB", "database_name": "yetzer-db", "database_id": "b4a10994-ea5e-4c8b-86c2-6feeed60a9c2", "migrations_dir": "migrations" }],

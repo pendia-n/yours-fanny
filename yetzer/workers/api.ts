@@ -92,7 +92,8 @@ export async function handleApi(request: Request, env: AppEnv): Promise<Response
     if (!Array.isArray(ids) || ids.length<1 || ids.length>3 || ids.some(id=>typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id))) throw new HttpError(400,"Choose your materials first.");
     const uploads:Upload[]=[];
     for (const id of ids) { const upload=await env.DB.prepare("SELECT * FROM uploads WHERE id=? AND account_id=? AND expires_at>?").bind(id,user.id,Date.now()+3600000).first<Upload>(); if (!upload) throw new HttpError(400,"One of your materials is missing or expired. Upload it again."); uploads.push(upload); }
-    const quest = await getQuest(env,purchase.quest_id), input = validateInputs(quest,uploads);
+    const quest = await getQuest(env,purchase.quest_id), input = validateInputs(quest,uploads,body.duration as number | undefined);
+    if (input.duration === undefined) throw new HttpError(400,"Choose an output duration before submitting.");
     const raw = typeof body.text === "string" ? body.text.trim() : "";
     if (raw.length>600) throw new HttpError(400,"Keep your optional idea under 600 characters.");
     const id = crypto.randomUUID(), token = await referenceToken(env,id);
