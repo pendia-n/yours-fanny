@@ -36,9 +36,9 @@ export function textField(data: Record<string, unknown>, key: string, max = 2000
   if (typeof value !== "string" || value.length > max) throw new HttpError(400, `Check the ${key} field.`);
   return value;
 }
-export function assertMutationOrigin(request: Request, env: AppEnv) {
+export function assertMutationOrigin(request: Request, _env: AppEnv) {
   const origin = request.headers.get("origin");
   const site = request.headers.get("sec-fetch-site");
-  if ((origin && origin !== new URL(env.APP_URL).origin) || site === "cross-site") throw new HttpError(403, "This request must come from Yetzer.");
+  if ((origin && origin !== new URL(request.url).origin) || site === "cross-site") throw new HttpError(403, "This request must come from Yetzer.");
   if (request.headers.has("cookie") && !origin && site !== "same-origin" && !request.headers.has("x-yetzer-client")) throw new HttpError(403, "API clients must send X-Yetzer-Client: api.");
 }

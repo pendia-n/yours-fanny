@@ -40,7 +40,8 @@ export async function refundServiceFailure(env: AppEnv, purchaseId: string, code
   if (!purchase || purchase.status === "refunded") return;
   await env.DB.prepare("UPDATE purchases SET status='refunding',failure_code=? WHERE id=?").bind(code, purchaseId).run();
   if (!purchase.payment_intent || !env.STRIPE_SECRET_KEY) return;
-  const refund = await stripe(env, "refunds", { payment_intent: purchase.payment_intent, "metadata[purchase_id]": purchaseId }, `yetzer-service-refund-${purchaseId}`);
+  const refundAmount = Math.round(purchase.price_cents / 2);
+  const refund = await stripe(env, "refunds", { payment_intent: purchase.payment_intent, amount: String(refundAmount), "metadata[purchase_id]": purchaseId, "metadata[refund_percent]": "50" }, `yetzer-service-refund-${purchaseId}`);
   await env.DB.prepare("UPDATE purchases SET status=?,refund_id=? WHERE id=?").bind(refund.status === "succeeded" ? "refunded" : "refunding", refund.id, purchaseId).run();
 }
 export async function stripeWebhook(request: Request, env: AppEnv) {

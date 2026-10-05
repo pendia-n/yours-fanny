@@ -6,7 +6,7 @@
   "main": "./workers/app.ts",
   "workers_dev": true,
   "vars": {
-    "APP_URL": "https://yetzer.pendia-community.workers.dev",
+    "APP_URL": "https://www.yetzer.lol",
     "SALES_ENABLED": "true",
     "SHORT_PRICE_CENTS": "699",
     "LONG_PRICE_CENTS": "1499"
