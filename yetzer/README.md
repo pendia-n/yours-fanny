@@ -16,7 +16,7 @@ The private `.env` holds `YETZER_JWT_SECRET` and `YETZER_PASSWORD_PEPPER`. Both 
 
 The `/schedule` page publishes the New York opening, purchase, submission, and expiry windows. Do not treat a successful build or deploy as proof that paid generation works end to end.
 
-Short plays (Edit, Perform, Imagine) cost USD 2.99; Adventure costs USD 7.99. Each purchase permits one creative submission. Separate audio uploads must be 5-15 seconds for every audio-capable quest. Perform requires an image and audio, and lets the user choose a 10-15 second output independently of the audio length. Extra text remains optional but is recommended to state desired changes and details to preserve.
+Short plays (Edit, Perform, Imagine) cost USD 2.99; Adventure costs USD 8.99. Adventure accepts 15-30 second source videos and offers 15-28 second outputs. Each purchase permits one creative submission. Separate audio uploads must be 5-15 seconds for every audio-capable quest. Perform requires an image and audio, and lets the user choose a 10-15 second output independently of the audio length. Extra text remains optional but is recommended to state desired changes and details to preserve.
 
 Purchases are non-refundable, including creative dissatisfaction and technical failures, subject to applicable statutory rights. Service failures are recorded without issuing Stripe refunds or granting a free new attempt. Historical Stripe refund notifications are still reconciled.
 

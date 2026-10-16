@@ -56,7 +56,7 @@ test('route requirements and duration bounds reject unsuitable inputs',()=>{
  assert.throws(()=>validateInputs(quest('edit'),[upload('video',16)]));assert.throws(()=>validateInputs(quest('edit'),[upload('video'),upload('image')]));
  assert.throws(()=>validateInputs(quest('perform'),[upload('image')]));assert.equal(validateInputs(quest('perform'),[upload('image'),upload('audio')]).duration,12);
  assert.throws(()=>validateInputs(quest('imagine'),[upload('image')]));assert.throws(()=>validateInputs(quest('imagine'),[upload('video',30)]));
- assert.equal(validateInputs(quest('adventure'),[upload('video',30)],30).duration,30);
+ assert.equal(validateInputs(quest('adventure'),[upload('video',30)],28).duration,28);
 });
 test('all video routes submit supported request shapes without a paid generation',()=>{
  for(const kind of ['edit','perform','imagine','adventure']){

@@ -36,7 +36,7 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
     "payment_intent_data[metadata][refund_policy]": "no_voluntary_refunds",
     "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(quest.priceCents),
     "line_items[0][price_data][product_data][name]": `Yetzer: ${quest.title}`,
-    "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.kind === "adventure" ? "15-30" : "10-15"}-second output. Non-refundable. Download within 47 hours of completion.`,
+    "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.kind === "adventure" ? "15-28" : "10-15"}-second output. Non-refundable. Download within 47 hours of completion.`,
     "line_items[0][price_data][product_data][metadata][app]": "yetzer",
     "custom_text[submit][message]": "Yetzer: one paid creative attempt. No refunds or free new attempts, including for creative dissatisfaction or technical failure. Applicable statutory rights remain.",
     "metadata[quest_title]": quest.title,

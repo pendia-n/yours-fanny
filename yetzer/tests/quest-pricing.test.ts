@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ROUTES, type Quest, type QuestKind } from "../app/lib/domain";
 import { validateAudioDuration, validateInputs, type Upload } from "../workers/media";
-import { currentPrice } from "../workers/quests";
+import { currentPrice, getQuest } from "../workers/quests";
 import type { AppEnv } from "../workers/types";
 
-const env = { SHORT_PRICE_CENTS: "299", LONG_PRICE_CENTS: "799" } as AppEnv;
+const env = { SHORT_PRICE_CENTS: "299", LONG_PRICE_CENTS: "899" } as AppEnv;
 const quest = (kind: QuestKind): Quest => ({
   id: kind, templateId: kind, day: "2026-10-05", title: kind,
   invitation: "", preparation: "", transformation: "", preserve: "",
-  kind, duration: kind === "adventure" ? 30 : 15, priceCents: currentPrice(env, kind),
+  kind, duration: kind === "adventure" ? 28 : 15, priceCents: currentPrice(env, kind),
   ...ROUTES[kind],
 });
 const media = (kind: Upload["kind"], duration: number | null): Upload => ({
@@ -19,7 +19,7 @@ const media = (kind: Upload["kind"], duration: number | null): Upload => ({
 
 test("three short quests share one price; adventure has its own price", () => {
   for (const kind of ["edit", "perform", "imagine"] as const) assert.equal(currentPrice(env, kind), 299);
-  assert.equal(currentPrice(env, "adventure"), 799);
+  assert.equal(currentPrice(env, "adventure"), 899);
 });
 
 test("perform accepts 5-15 second audio while output remains 10-15 seconds", () => {
@@ -33,7 +33,7 @@ test("perform accepts 5-15 second audio while output remains 10-15 seconds", () 
 test("all audio-capable quests enforce the same 5-15 second range", () => {
   for (const kind of ["perform", "imagine", "adventure"] as const) {
     const inputs = kind === "perform" ? [media("image", null)] : [media("video", kind === "adventure" ? 30 : 15)];
-    const output = kind === "adventure" ? 30 : 15;
+    const output = kind === "adventure" ? 28 : 15;
     for (const duration of [5, 15]) assert.doesNotThrow(() => validateInputs(quest(kind), [...inputs, media("audio", duration)], output));
     for (const duration of [4.99, 15.01, 30]) assert.throws(() => validateInputs(quest(kind), [...inputs, media("audio", duration)], output), /audio must be 5-15 seconds/);
   }
@@ -57,5 +57,14 @@ test("imagine and adventure enforce their distinct ranges", () => {
   assert.throws(() => validateInputs(quest("adventure"), [media("video", 14)], 16));
   assert.equal(validateInputs(quest("adventure"), [media("video", 15)], 16).duration, 16);
   assert.equal(validateInputs(quest("adventure"), [media("video", 30)], 27).duration, 27);
-  assert.throws(() => validateInputs(quest("adventure"), [media("video", 30)], 31));
+  assert.equal(validateInputs(quest("adventure"), [media("video", 30)], 28).duration, 28);
+  for (const duration of [29, 30, 31]) assert.throws(() => validateInputs(quest("adventure"), [media("video", 30)], duration));
+});
+
+test("saved Adventure quests expose the current price and capped output duration", async () => {
+  const saved = { ...quest("adventure"), duration: 30, priceCents: 799 };
+  const db = { prepare() { return { bind() { return this; }, async first() { return { snapshot: JSON.stringify(saved) }; } }; } };
+  const loaded = await getQuest({ ...env, DB: db } as unknown as AppEnv, saved.id);
+  assert.equal(loaded.priceCents, 899);
+  assert.equal(loaded.duration, 28);
 });

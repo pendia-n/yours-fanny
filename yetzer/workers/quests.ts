@@ -4,7 +4,7 @@ export function currentPrice(env: AppEnv, kind: QuestKind) {
   return Number(kind === "adventure" ? env.LONG_PRICE_CENTS : env.SHORT_PRICE_CENTS);
 }
 function withCurrentPrice(env: AppEnv, quest: Quest): Quest {
-  return { ...quest, priceCents: currentPrice(env, quest.kind) };
+  return { ...quest, duration: quest.kind === "adventure" ? Math.min(quest.duration, 28) : quest.duration, priceCents: currentPrice(env, quest.kind) };
 }
 export function serviceReadiness(env: AppEnv) {
   const generationReady = !!env.OPENROUTER_API_KEY;

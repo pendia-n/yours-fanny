@@ -7,7 +7,7 @@ import type { Account, AppEnv } from "../workers/types";
 const quest = (kind: QuestKind): Quest => ({
   id: `2026-10-19_${kind}`, templateId: kind, day: "2026-10-19", title: "A playful scene",
   invitation: "", preparation: "", transformation: "", preserve: "", kind,
-  duration: kind === "adventure" ? 30 : 15, priceCents: kind === "adventure" ? 799 : 299,
+  duration: kind === "adventure" ? 28 : 15, priceCents: kind === "adventure" ? 899 : 299,
   ...ROUTES[kind],
 });
 function environment(existing: unknown = null) {
@@ -39,6 +39,7 @@ test("Checkout labels Yetzer on the page and PaymentIntent with the new ticket p
     const fields = requests.at(-1)!;
     assert.equal(fields.get("mode"), "payment");
     assert.equal(fields.get("line_items[0][price_data][unit_amount]"), String(q.priceCents));
+    if (kind === "adventure") assert.match(fields.get("line_items[0][price_data][product_data][description]")!, /15-28-second output/);
     assert.equal(fields.get("line_items[0][price_data][product_data][name]"), `Yetzer: ${q.title}`);
     assert.equal(fields.get("metadata[app]"), "yetzer");
     assert.equal(fields.get("payment_intent_data[metadata][app]"), "yetzer");
