@@ -1,6 +1,6 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { RETENTION_MS } from "../app/lib/domain";
-import { refundServiceFailure } from "./billing";
+import { markServiceFailure } from "./billing";
 import { digest, hmac, base64url } from "./crypto";
 import { inspectMp4, type Upload } from "./media";
 import type { AppEnv } from "./types";
@@ -102,7 +102,7 @@ export class GenerationWorkflow extends WorkflowEntrypoint<AppEnv, { generationI
       if (row?.status === "completed" || row?.status === "expired") throw error;
       const code = row?.provider_submitted_at && !row.provider_id ? "submission_ambiguous" : row?.status === "saving" ? "delivery_failed" : "provider_failed";
       await step.do("mark-service-failure",async () => { await this.env.DB.prepare("UPDATE generations SET status='service_failed',error_code=?,reference_expires_at=0 WHERE id=?").bind(code,id).run(); });
-      await step.do("refund-service-failure",{ retries: { limit: 8, delay: "1 minute", backoff: "exponential" } },async () => refundServiceFailure(this.env,initial.purchase_id,code));
+      await step.do("record-purchase-failure",{ retries: { limit: 8, delay: "1 minute", backoff: "exponential" } },async () => markServiceFailure(this.env,initial.purchase_id,code));
       return { status: "service_failed", code };
     }
   }

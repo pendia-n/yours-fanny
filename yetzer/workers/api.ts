@@ -1,9 +1,9 @@
 import { canSubmitPurchase, nyParts, schedule, type Quest } from "../app/lib/domain";
 import { authApi, currentAccount, publicUser, rateLimit, requireAccount } from "./auth";
-import { createCheckout, refundServiceFailure, stripe, stripeWebhook, type Purchase } from "./billing";
+import { createCheckout, stripe, stripeWebhook, type Purchase } from "./billing";
 import { digest } from "./crypto";
 import { expireGeneration, limitedBytes, referenceToken, type Generation } from "./generation";
-import { inspectMedia, validateInputs, type Upload } from "./media";
+import { inspectMedia, validateAudioDuration, validateInputs, type Upload } from "./media";
 import { ensureDaily, getQuest, questPrompt, serviceReadiness } from "./quests";
 import { assertMutationOrigin, HttpError, json, readJson, textField, type AppEnv } from "./types";
 
@@ -60,6 +60,7 @@ export async function handleApi(request: Request, env: AppEnv): Promise<Response
     const length = Number(request.headers.get("content-length"));
     if (!request.body || length>40*1024*1024) throw new HttpError(413,"Keep each file under 40 MB.");
     const bytes = await limitedBytes(request.body,40*1024*1024), info = inspectMedia(bytes);
+    validateAudioDuration(info);
     if (info.kind !== "image" && (!info.duration || info.duration>30.02)) throw new HttpError(400,"Prepare a clip no longer than 30 seconds. Some quests require 15 seconds or less.");
     if (info.kind === "image" && bytes.length>10*1024*1024) throw new HttpError(413,"Keep images under 10 MB.");
     const id = crypto.randomUUID(), key = `${user.username}/uploads/${id}`;
@@ -137,8 +138,6 @@ export async function maintenance(env: AppEnv) {
   for (const row of uploads.results) { await env.MEDIA.delete(row.r2_key); await env.DB.prepare("DELETE FROM uploads WHERE id=?").bind(row.id).run(); }
   await env.DB.batch([env.DB.prepare("DELETE FROM rate_limits WHERE expires_at<?").bind(Date.now()-86400000),env.DB.prepare("DELETE FROM recovery_tickets WHERE expires_at<?").bind(Date.now())]);
   await env.DB.prepare("UPDATE generations SET raw_text='',prompt='',upload_ids='[]' WHERE status='service_failed' AND created_at<?").bind(Date.now()-48*3600000).run();
-  const refunds=await env.DB.prepare("SELECT id FROM purchases WHERE status='refunding' LIMIT 10").all<{id:string}>();
-  for(const row of refunds.results) { try { await refundServiceFailure(env,row.id,"service_failure"); } catch { /* Retry through the next scheduled run with the same Stripe idempotency key. */ } }
   if(env.STRIPE_SECRET_KEY) {
     const stale=await env.DB.prepare("SELECT * FROM purchases WHERE status IN ('pending','reserved') AND created_at<? LIMIT 10").bind(Date.now()-35*60000).all<Purchase>();
     for(const row of stale.results) {

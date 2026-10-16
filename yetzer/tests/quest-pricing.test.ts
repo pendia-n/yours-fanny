@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ROUTES, type Quest, type QuestKind } from "../app/lib/domain";
-import { validateInputs, type Upload } from "../workers/media";
+import { validateAudioDuration, validateInputs, type Upload } from "../workers/media";
 import { currentPrice } from "../workers/quests";
 import type { AppEnv } from "../workers/types";
 
-const env = { SHORT_PRICE_CENTS: "699", LONG_PRICE_CENTS: "1499" } as AppEnv;
+const env = { SHORT_PRICE_CENTS: "299", LONG_PRICE_CENTS: "799" } as AppEnv;
 const quest = (kind: QuestKind): Quest => ({
   id: kind, templateId: kind, day: "2026-10-05", title: kind,
   invitation: "", preparation: "", transformation: "", preserve: "",
@@ -18,14 +18,31 @@ const media = (kind: Upload["kind"], duration: number | null): Upload => ({
 } as Upload);
 
 test("three short quests share one price; adventure has its own price", () => {
-  for (const kind of ["edit", "perform", "imagine"] as const) assert.equal(currentPrice(env, kind), 699);
-  assert.equal(currentPrice(env, "adventure"), 1499);
+  for (const kind of ["edit", "perform", "imagine"] as const) assert.equal(currentPrice(env, kind), 299);
+  assert.equal(currentPrice(env, "adventure"), 799);
 });
 
-test("perform requires image and 10-15 second audio, not video", () => {
+test("perform accepts 5-15 second audio while output remains 10-15 seconds", () => {
   assert.equal(validateInputs(quest("perform"), [media("image", null), media("audio", 12.4)]).duration, 12);
+  assert.equal(validateInputs(quest("perform"), [media("image", null), media("audio", 5)]).duration, 10);
+  assert.equal(validateInputs(quest("perform"), [media("image", null), media("audio", 5)], 15).duration, 15);
+  assert.throws(() => validateInputs(quest("perform"), [media("image", null), media("audio", 5)], 9));
   assert.throws(() => validateInputs(quest("perform"), [media("image", null)]));
-  assert.throws(() => validateInputs(quest("perform"), [media("image", null), media("audio", 9)]));
+});
+
+test("all audio-capable quests enforce the same 5-15 second range", () => {
+  for (const kind of ["perform", "imagine", "adventure"] as const) {
+    const inputs = kind === "perform" ? [media("image", null)] : [media("video", kind === "adventure" ? 30 : 15)];
+    const output = kind === "adventure" ? 30 : 15;
+    for (const duration of [5, 15]) assert.doesNotThrow(() => validateInputs(quest(kind), [...inputs, media("audio", duration)], output));
+    for (const duration of [4.99, 15.01, 30]) assert.throws(() => validateInputs(quest(kind), [...inputs, media("audio", duration)], output), /audio must be 5-15 seconds/);
+  }
+});
+
+test("upload audio validation rejects out-of-range and unreadable durations", () => {
+  for (const duration of [5, 15]) assert.doesNotThrow(() => validateAudioDuration({ kind: "audio", duration }));
+  for (const duration of [null, NaN, 0, 4.99, 15.01, Infinity]) assert.throws(() => validateAudioDuration({ kind: "audio", duration }));
+  assert.doesNotThrow(() => validateAudioDuration({ kind: "video", duration: 30 }));
 });
 
 test("edit follows a 10-15 second source video", () => {

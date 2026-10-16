@@ -16,6 +16,7 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
   if (!/^[0-9a-f-]{36}$/.test(requestId)) throw new HttpError(400, "Provide a UUID requestId for this purchase.");
   let purchase = await env.DB.prepare("SELECT * FROM purchases WHERE id=?").bind(requestId).first<Purchase>();
   if (purchase && (purchase.account_id !== user.id || purchase.quest_id !== quest.id)) throw new HttpError(409, "This purchase reference is already in use.");
+  if (purchase && purchase.price_cents !== quest.priceCents) throw new HttpError(409, "This checkout uses an earlier ticket price. Start a new purchase from today's quest.");
   if (purchase?.checkout_url && purchase.status === "pending") return { url: purchase.checkout_url, purchaseId: purchase.id };
   if (purchase && purchase.status !== "reserved") throw new HttpError(409, "This purchase is already being processed. Check My plays.");
   if (!purchase) {
@@ -25,9 +26,19 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
   const session = await stripe(env, "checkout/sessions", {
     mode: "payment", success_url: `${env.APP_URL}/plays?purchase=${requestId}`, cancel_url: `${env.APP_URL}/quests/${quest.id}?checkout=cancelled`,
     client_reference_id: requestId, "metadata[purchase_id]": requestId,
+    "metadata[app]": "yetzer", "metadata[quest_kind]": quest.kind, "metadata[quest_id]": quest.id,
+    "metadata[refund_policy]": "no_voluntary_refunds",
+    "payment_intent_data[description]": `Yetzer: ${quest.title}`,
+    "payment_intent_data[metadata][app]": "yetzer",
+    "payment_intent_data[metadata][purchase_id]": requestId,
+    "payment_intent_data[metadata][quest_id]": quest.id,
+    "payment_intent_data[metadata][quest_kind]": quest.kind,
+    "payment_intent_data[metadata][refund_policy]": "no_voluntary_refunds",
     "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(quest.priceCents),
     "line_items[0][price_data][product_data][name]": `Yetzer: ${quest.title}`,
-    "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.kind === "adventure" ? "15-30" : "10-15"}-second output. Download within 47 hours of completion.`,
+    "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.kind === "adventure" ? "15-30" : "10-15"}-second output. Non-refundable. Download within 47 hours of completion.`,
+    "line_items[0][price_data][product_data][metadata][app]": "yetzer",
+    "custom_text[submit][message]": "Yetzer: one paid creative attempt. No refunds or free new attempts, including for creative dissatisfaction or technical failure. Applicable statutory rights remain.",
     "metadata[quest_title]": quest.title,
     "line_items[0][quantity]": "1", expires_at: String(Math.floor(Date.now() / 1000) + 1800),
   }, `yetzer-checkout-${requestId}`);
@@ -35,14 +46,8 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
   await env.DB.prepare("UPDATE purchases SET status='pending',checkout_id=?,checkout_url=? WHERE id=? AND status='reserved'").bind(session.id, session.url, requestId).run();
   return { url: session.url, purchaseId: requestId };
 }
-export async function refundServiceFailure(env: AppEnv, purchaseId: string, code: string) {
-  const purchase = await env.DB.prepare("SELECT * FROM purchases WHERE id=?").bind(purchaseId).first<Purchase>();
-  if (!purchase || purchase.status === "refunded") return;
-  await env.DB.prepare("UPDATE purchases SET status='refunding',failure_code=? WHERE id=?").bind(code, purchaseId).run();
-  if (!purchase.payment_intent || !env.STRIPE_SECRET_KEY) return;
-  const refundAmount = Math.round(purchase.price_cents / 2);
-  const refund = await stripe(env, "refunds", { payment_intent: purchase.payment_intent, amount: String(refundAmount), "metadata[purchase_id]": purchaseId, "metadata[refund_percent]": "50" }, `yetzer-service-refund-${purchaseId}`);
-  await env.DB.prepare("UPDATE purchases SET status=?,refund_id=? WHERE id=?").bind(refund.status === "succeeded" ? "refunded" : "refunding", refund.id, purchaseId).run();
+export async function markServiceFailure(env: AppEnv, purchaseId: string, code: string) {
+  await env.DB.prepare("UPDATE purchases SET status='service_failed',failure_code=? WHERE id=? AND refund_id IS NULL AND status <> 'refunded'").bind(code, purchaseId).run();
 }
 export async function stripeWebhook(request: Request, env: AppEnv) {
   if (!env.STRIPE_WEBHOOK_SECRET) throw new HttpError(503, "Payment verification is not configured.");
@@ -64,7 +69,7 @@ export async function stripeWebhook(request: Request, env: AppEnv) {
     const paidWindow = schedule(paidAt);
     await env.DB.prepare("UPDATE purchases SET payment_intent=?,paid_at=? WHERE id=? AND payment_intent IS NULL").bind(session.payment_intent,paidAt,id).run();
     if (!paidWindow.purchase || paidWindow.day !== purchase.purchase_day || Date.now() >= purchase.expires_at || purchase.status === "expired") {
-      await refundServiceFailure(env, id, "payment_outside_window");
+      await markServiceFailure(env, id, "payment_outside_window");
     } else {
       await env.DB.prepare("UPDATE purchases SET status='paid' WHERE id=? AND status IN ('pending','reserved')").bind(id).run();
     }
