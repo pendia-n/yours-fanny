@@ -3,7 +3,7 @@ import { authApi, currentAccount, publicUser, rateLimit, requireAccount } from "
 import { createCheckout, stripe, stripeWebhook, type Purchase } from "./billing";
 import { digest } from "./crypto";
 import { expireGeneration, limitedBytes, referenceToken, type Generation } from "./generation";
-import { inspectMedia, validateAudioDuration, validateInputs, type Upload } from "./media";
+import { inspectMedia, validateUploadDuration, validateInputs, type Upload } from "./media";
 import { ensureDaily, getQuest, questPrompt, serviceReadiness } from "./quests";
 import { assertMutationOrigin, HttpError, json, readJson, textField, type AppEnv } from "./types";
 
@@ -54,14 +54,20 @@ export async function handleApi(request: Request, env: AppEnv): Promise<Response
   }
   if (path === "/api/uploads" && request.method === "POST") {
     const user = await requireAccount(request,env);
+    const questId = new URL(request.url).searchParams.get("questId");
+    const quest = questId ? await getQuest(env,questId) : undefined;
+    const window = schedule();
+    if (!window.purchase || quest && quest.day !== window.day) {
+      const tickets = await env.DB.prepare("SELECT purchase_day FROM purchases WHERE account_id=? AND status='paid'" + (quest ? " AND quest_id=?" : "")).bind(...(quest ? [user.id,quest.id] : [user.id])).all<{purchase_day:string}>();
+      if (!tickets.results.some(ticket=>canSubmitPurchase(ticket.purchase_day))) throw new HttpError(409,"Material uploads are closed now (New York time). Check opening hours before preparing your files.");
+    }
     await rateLimit(env,`upload:${user.id}`,15,3600000);
     const reserved = await env.DB.prepare("SELECT COUNT(*) AS count FROM uploads WHERE account_id=? AND expires_at>?").bind(user.id,Date.now()).first<{count:number}>();
     if ((reserved?.count ?? 0)>=12) throw new HttpError(429,"You have enough prepared materials. Remove an unused upload before adding another.");
     const length = Number(request.headers.get("content-length"));
     if (!request.body || length>40*1024*1024) throw new HttpError(413,"Keep each file under 40 MB.");
     const bytes = await limitedBytes(request.body,40*1024*1024), info = inspectMedia(bytes);
-    validateAudioDuration(info);
-    if (info.kind !== "image" && (!info.duration || info.duration>30.02)) throw new HttpError(400,"Prepare a clip no longer than 30 seconds. Some quests require 15 seconds or less.");
+    validateUploadDuration(info,quest?.kind);
     if (info.kind === "image" && bytes.length>10*1024*1024) throw new HttpError(413,"Keep images under 10 MB.");
     const id = crypto.randomUUID(), key = `${user.username}/uploads/${id}`;
     await env.MEDIA.put(key,bytes,{ httpMetadata:{contentType:info.contentType,cacheControl:"private, no-store"} });
