@@ -38,6 +38,9 @@ test("Checkout labels Yetzer on the page and PaymentIntent with the new ticket p
     await createCheckout(env, { id: "account-test" } as Account, q, id);
     const fields = requests.at(-1)!;
     assert.equal(fields.get("mode"), "payment");
+    assert.equal(fields.get("line_items[0][price_data][currency]"), "usd");
+    assert.ok(![...fields.keys()].some(key => /payment_method_types|excluded_payment_method_types/.test(key)), "Leave dynamic payment methods enabled so eligible customers can use Crypto/USDC");
+    assert.match(fields.get("custom_text[submit][message]")!, /USDC.*when offered by Stripe/);
     assert.equal(fields.get("line_items[0][price_data][unit_amount]"), String(q.priceCents));
     if (kind === "adventure") assert.match(fields.get("line_items[0][price_data][product_data][description]")!, /15-28-second output/);
     assert.equal(fields.get("line_items[0][price_data][product_data][name]"), `Yetzer: ${q.title}`);

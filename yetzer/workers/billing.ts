@@ -23,6 +23,8 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
     try { await env.DB.prepare("INSERT INTO purchases(id,account_id,quest_id,purchase_day,status,price_cents,created_at,expires_at) VALUES(?,?,?,?,'reserved',?,?,?)").bind(requestId, user.id, quest.id, time.day, quest.priceCents, time.now, submissionDeadline(time.day)).run(); }
     catch (e) { if (String(e).includes("daily_purchase_limit")) throw new HttpError(409, "You can buy up to three plays per New York day."); throw e; }
   }
+  // Dynamic payment methods include USDC when Stripe approves and enables Crypto.
+  // Do not restrict this session to cards; wallet/network selection stays on Stripe.
   const session = await stripe(env, "checkout/sessions", {
     mode: "payment", success_url: `${env.APP_URL}/plays?purchase=${requestId}`, cancel_url: `${env.APP_URL}/quests/${quest.id}?checkout=cancelled`,
     client_reference_id: requestId, "metadata[purchase_id]": requestId,
@@ -38,7 +40,7 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
     "line_items[0][price_data][product_data][name]": `Yetzer: ${quest.title}`,
     "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.kind === "adventure" ? "15-28" : "10-15"}-second output. Non-refundable. Download within 47 hours of completion.`,
     "line_items[0][price_data][product_data][metadata][app]": "yetzer",
-    "custom_text[submit][message]": "Yetzer: one paid creative attempt. No refunds or free new attempts, including for creative dissatisfaction or technical failure. Applicable statutory rights remain.",
+    "custom_text[submit][message]": "USDC is available through Crypto when offered by Stripe. Yetzer: one paid creative attempt. No refunds or free new attempts, including for creative dissatisfaction or technical failure. Applicable statutory rights remain.",
     "metadata[quest_title]": quest.title,
     "line_items[0][quantity]": "1", expires_at: String(Math.floor(Date.now() / 1000) + 1800),
   }, `yetzer-checkout-${requestId}`);
