@@ -57,15 +57,35 @@ export function validUsername(value: string) { return /^[A-Za-z][A-Za-z0-9_]{2,2
 export function validPassword(value: string) { return value.length >= 7 && value.length <= 18 && /[A-Za-z]/.test(value) && /[0-9]/.test(value); }
 export function validPasscode(value: string) { return /^[a-z0-9]{8}$/.test(value); }
 
-// A fresh day-seeded shuffle: unique within a day, eligible again tomorrow.
-export function dailySelection<T>(all: T[], day: string): T[] {
-  if (all.length !== 220) throw new Error("The quest catalogue must contain exactly 220 entries.");
-  const deck = [...all];
+function dailyRandom(day: string) {
   let seed = 2166136261;
-  for (const c of day) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619) >>> 0;
-  for (let i = deck.length - 1; i > 0; i--) {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    const j = seed % (i + 1); [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
-  return deck.slice(0, 5);
+  for (const c of `yetzer-daily-v2:${day}`) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619) >>> 0;
+  return () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let value = Math.imul(seed ^ seed >>> 15, seed | 1);
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+}
+export function dailyAdventureProbability(day: string) { return dailyRandom(day)(); }
+
+// A date fixes the draw across retries and Workers; saved boards never reroll.
+export function dailySelection<T extends { kind: QuestKind }>(all: T[], day: string, probability = dailyAdventureProbability(day)): T[] {
+  if (all.length !== 220) throw new Error("The quest catalogue must contain exactly 220 entries.");
+  if (!Number.isFinite(probability) || probability < 0 || probability >= 1) throw new Error("Daily probability must be between 0 and 1 (exclusive).");
+  const random = dailyRandom(day);
+  random();
+  const shuffle = (items: T[]) => {
+    const deck = [...items];
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    return deck;
+  };
+  const count = probability >= 0.5 ? 2 : 1;
+  const adventures = shuffle(all.filter(q => q.kind === "adventure"));
+  const shorts = shuffle(all.filter(q => q.kind !== "adventure"));
+  if (adventures.length < count || shorts.length < 5 - count) throw new Error("Not enough quests for the daily mix.");
+  return shuffle([...adventures.slice(0, count), ...shorts.slice(0, 5 - count)]);
 }

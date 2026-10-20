@@ -7,7 +7,7 @@ import type { Account, AppEnv } from "../workers/types";
 const quest = (kind: QuestKind): Quest => ({
   id: `2026-10-19_${kind}`, templateId: kind, day: "2026-10-19", title: "A playful scene",
   invitation: "", preparation: "", transformation: "", preserve: "", kind,
-  duration: kind === "adventure" ? 28 : 15, priceCents: kind === "adventure" ? 899 : 299,
+  duration: kind === "adventure" ? 28 : 15, priceCents: kind === "adventure" ? 1199 : 299,
   ...ROUTES[kind],
 });
 function environment(existing: unknown = null) {

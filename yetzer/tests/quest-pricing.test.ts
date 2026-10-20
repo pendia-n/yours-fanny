@@ -5,7 +5,7 @@ import { validateAudioDuration, validateInputs, type Upload } from "../workers/m
 import { currentPrice, getQuest } from "../workers/quests";
 import type { AppEnv } from "../workers/types";
 
-const env = { SHORT_PRICE_CENTS: "299", LONG_PRICE_CENTS: "899" } as AppEnv;
+const env = { SHORT_PRICE_CENTS: "299", LONG_PRICE_CENTS: "1199" } as AppEnv;
 const quest = (kind: QuestKind): Quest => ({
   id: kind, templateId: kind, day: "2026-10-05", title: kind,
   invitation: "", preparation: "", transformation: "", preserve: "",
@@ -19,7 +19,7 @@ const media = (kind: Upload["kind"], duration: number | null): Upload => ({
 
 test("three short quests share one price; adventure has its own price", () => {
   for (const kind of ["edit", "perform", "imagine"] as const) assert.equal(currentPrice(env, kind), 299);
-  assert.equal(currentPrice(env, "adventure"), 899);
+  assert.equal(currentPrice(env, "adventure"), 1199);
 });
 
 test("perform accepts 5-15 second audio while output remains 10-15 seconds", () => {
@@ -65,6 +65,6 @@ test("saved Adventure quests expose the current price and capped output duration
   const saved = { ...quest("adventure"), duration: 30, priceCents: 799 };
   const db = { prepare() { return { bind() { return this; }, async first() { return { snapshot: JSON.stringify(saved) }; } }; } };
   const loaded = await getQuest({ ...env, DB: db } as unknown as AppEnv, saved.id);
-  assert.equal(loaded.priceCents, 899);
+  assert.equal(loaded.priceCents, 1199);
   assert.equal(loaded.duration, 28);
 });

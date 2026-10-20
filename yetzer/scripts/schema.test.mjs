@@ -13,4 +13,9 @@ const generation="INSERT INTO generations(id,purchase_id,account_id,quest_id,sub
 assert.throws(()=>run(setup+purchase(1,'pending')+generation),/purchase_not_available/);
 assert.equal(run(setup+purchase(1)+generation+"SELECT status FROM purchases WHERE id='p1';"),'submitted');
 assert.throws(()=>run(setup+purchase(1)+generation+generation.replace("'g'","'g2'")),/purchase_not_available|UNIQUE/);
-console.log('7 offline SQLite schema/entitlement assertions passed. No app server or remote data used.');
+const mixedSetup=setup+['imagine','adventure','perform'].map((kind,i)=>`INSERT INTO daily_quests VALUES('q${i+2}','2026-10-03','${kind}-001',${i+1},'{}');`).join('');
+const mixedPurchases=[1,2,3,4].map(n=>purchase(n).replace("'q'",n===1?"'q'":`'q${n}'`).replace("'2026-10-03'",`'2026-10-0${n}'`)).join('');
+const attempts=[1,2,3,4].map(n=>generation.replace("'g'",`'g${n}'`).replace("'p1'",`'p${n}'`).replace("'q'",n===1?"'q'":`'q${n}'`).replace("'queued'",`'${['completed','service_failed','queued','queued'][n-1]}'`));
+assert.equal(run(mixedSetup+mixedPurchases+attempts.slice(0,3).join('')+"SELECT COUNT(*) FROM generations WHERE account_id='a';"),'3');
+assert.throws(()=>run(mixedSetup+mixedPurchases+attempts.join('')),/daily_submission_limit/);
+console.log('9 offline SQLite schema/entitlement assertions passed, including mixed types and failed attempts. No app server or remote data used.');
