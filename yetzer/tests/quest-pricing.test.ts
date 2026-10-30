@@ -61,10 +61,11 @@ test("imagine and adventure enforce their distinct ranges", () => {
   for (const duration of [29, 30, 31]) assert.throws(() => validateInputs(quest("adventure"), [media("video", 30)], duration));
 });
 
-test("saved Adventure quests expose the current price and capped output duration", async () => {
-  const saved = { ...quest("adventure"), duration: 30, priceCents: 799 };
+test("saved Adventure quests use Wan 3.0 with the current price and capped output duration", async () => {
+  const saved = { ...quest("adventure"), model: "bytedance/seedance-2.5", duration: 30, priceCents: 799 };
   const db = { prepare() { return { bind() { return this; }, async first() { return { snapshot: JSON.stringify(saved) }; } }; } };
   const loaded = await getQuest({ ...env, DB: db } as unknown as AppEnv, saved.id);
   assert.equal(loaded.priceCents, 1199);
   assert.equal(loaded.duration, 28);
+  assert.equal(loaded.model, "alibaba/wan-3.0");
 });

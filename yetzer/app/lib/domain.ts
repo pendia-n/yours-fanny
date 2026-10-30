@@ -10,7 +10,7 @@ export const ROUTES = {
   edit: { model: "black-forest-labs/flux-video-edit", resolution: "720p", label: "Change the scene", requires: ["video"] },
   perform: { model: "heygen/heygen-video-1", resolution: "768p", label: "Bring your voice", requires: ["image", "audio"] },
   imagine: { model: "bytedance/seedance-2.0-mini", resolution: "720p", label: "A little impossible", requires: ["video"] },
-  adventure: { model: "bytedance/seedance-2.5", resolution: "720p", label: "Take the long way", requires: ["video"] },
+  adventure: { model: "alibaba/wan-3.0", resolution: "720p", label: "Take the long way", requires: ["video"] },
 } as const;
 export const TIME_ZONE = "America/New_York";
 export const RETENTION_MS = 47 * 60 * 60 * 1000;

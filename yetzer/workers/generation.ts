@@ -1,5 +1,5 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
-import { RETENTION_MS } from "../app/lib/domain";
+import { RETENTION_MS, ROUTES } from "../app/lib/domain";
 import { markServiceFailure } from "./billing";
 import { digest, hmac, base64url } from "./crypto";
 import { inspectMp4, type Upload } from "./media";
@@ -86,7 +86,7 @@ export class GenerationWorkflow extends WorkflowEntrypoint<AppEnv, { generationI
           const bytes = await limitedBytes(output.body!,50 * 1024 * 1024);
           const info = inspectMp4(bytes);
           const shortSide = Math.min(info.width ?? 0,info.height ?? 0);
-          const maxOutputDuration = row.model === "bytedance/seedance-2.5" && row.duration <= 28 ? 28.05 : 30.05;
+          const maxOutputDuration = row.model === ROUTES.adventure.model && row.duration <= 28 ? 28.05 : 30.05;
           if (info.kind !== "video" || shortSide !== Number.parseInt(row.resolution) || !info.duration || Math.abs(info.duration-row.duration)>1.05 || info.duration<9.95 || info.duration>maxOutputDuration || (row.model.includes("flux-video-edit") && info.duration>15.05)) throw new Error("provider_output_invalid");
           const hash = await crypto.subtle.digest("SHA-256",bytes);
           await this.env.MEDIA.put(key,bytes,{ httpMetadata: { contentType: "video/mp4", cacheControl: "private, no-store" }, sha256: hash, customMetadata: { accountId: row.account_id, generationId: id, expiresAt: String(row.expires_at) } });
