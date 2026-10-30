@@ -1,6 +1,7 @@
 import { canSubmitPurchase, nyParts, schedule, type Quest } from "../app/lib/domain";
 import { authApi, currentAccount, publicUser, rateLimit, requireAccount } from "./auth";
-import { createCheckout, stripe, stripeWebhook, type Purchase } from "./billing";
+import { createCheckout, expireOutdatedCheckouts, stripe, stripeWebhook, type Purchase } from "./billing";
+import { automaticDuration, OUTPUT_POLICY_VERSION } from "./output-policy";
 import { digest } from "./crypto";
 import { expireGeneration, limitedBytes, referenceToken, type Generation } from "./generation";
 import { inspectMedia, validateUploadDuration, validateInputs, type Upload } from "./media";
@@ -99,13 +100,13 @@ export async function handleApi(request: Request, env: AppEnv): Promise<Response
     if (!Array.isArray(ids) || ids.length<1 || ids.length>3 || ids.some(id=>typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id))) throw new HttpError(400,"Choose your materials first.");
     const uploads:Upload[]=[];
     for (const id of ids) { const upload=await env.DB.prepare("SELECT * FROM uploads WHERE id=? AND account_id=? AND expires_at>?").bind(id,user.id,Date.now()+3600000).first<Upload>(); if (!upload) throw new HttpError(400,"One of your materials is missing or expired. Upload it again."); uploads.push(upload); }
-    const quest = await getQuest(env,purchase.quest_id), input = validateInputs(quest,uploads,body.duration as number | undefined);
-    if (input.duration === undefined) throw new HttpError(400,"Choose an output duration before submitting.");
+    const quest = await getQuest(env,purchase.quest_id), input = validateInputs(quest,uploads);
+    const duration = await automaticDuration(quest.kind,purchase.id,quest.id,input.sourceDuration);
     const raw = typeof body.text === "string" ? body.text.trim() : "";
     if (raw.length>600) throw new HttpError(400,"Keep your optional idea under 600 characters.");
     const id = crypto.randomUUID(), token = await referenceToken(env,id);
-    try { await env.DB.prepare("INSERT INTO generations(id,purchase_id,account_id,quest_id,submission_day,status,model,resolution,duration,raw_text,prompt,upload_ids,reference_token_hash,reference_expires_at,created_at) VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?)")
-      .bind(id,purchase.id,user.id,quest.id,nyParts().day,quest.model,quest.resolution,input.duration,raw,questPrompt({...quest,duration:input.duration},raw),JSON.stringify(ids),await digest(token),Date.now()+3*3600000,Date.now()).run(); }
+    try { await env.DB.prepare("INSERT INTO generations(id,purchase_id,account_id,quest_id,submission_day,status,model,resolution,duration,raw_text,prompt,upload_ids,reference_token_hash,reference_expires_at,created_at,output_policy_version) VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?,?)")
+      .bind(id,purchase.id,user.id,quest.id,nyParts().day,quest.model,quest.resolution,duration,raw,questPrompt({...quest,duration},raw),JSON.stringify(ids),await digest(token),Date.now()+3*3600000,Date.now(),OUTPUT_POLICY_VERSION).run(); }
     catch (e) { const msg=String(e); if (msg.includes("daily_submission_limit")) throw new HttpError(409,"You have already submitted three plays today."); if(msg.includes("UNIQUE") || msg.includes("purchase_not_available")) throw new HttpError(409,"This purchase has already been submitted."); throw e; }
     try { await env.GENERATION.create({ id,params:{generationId:id} }); } catch { /* The scheduled outbox dispatcher resumes queued work with this same ID. */ }
     return json({ generation:{id,status:"queued"} },202);
@@ -145,6 +146,7 @@ export async function maintenance(env: AppEnv) {
   await env.DB.batch([env.DB.prepare("DELETE FROM rate_limits WHERE expires_at<?").bind(Date.now()-86400000),env.DB.prepare("DELETE FROM recovery_tickets WHERE expires_at<?").bind(Date.now())]);
   await env.DB.prepare("UPDATE generations SET raw_text='',prompt='',upload_ids='[]' WHERE status='service_failed' AND created_at<?").bind(Date.now()-48*3600000).run();
   if(env.STRIPE_SECRET_KEY) {
+    await expireOutdatedCheckouts(env);
     const stale=await env.DB.prepare("SELECT * FROM purchases WHERE status IN ('pending','reserved') AND created_at<? LIMIT 10").bind(Date.now()-35*60000).all<Purchase>();
     for(const row of stale.results) {
       if(!row.checkout_id) continue;

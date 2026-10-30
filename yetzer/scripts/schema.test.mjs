@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import assert from 'node:assert/strict';
-const schema=readFileSync('migrations/0001_initial.sql','utf8')+readFileSync('migrations/0002_quests.sql','utf8')+readFileSync('migrations/0003_daily_variations.sql','utf8');
+const schema=readFileSync('migrations/0001_initial.sql','utf8')+readFileSync('migrations/0002_quests.sql','utf8')+readFileSync('migrations/0003_daily_variations.sql','utf8')+readFileSync('migrations/0004_output_policy.sql','utf8');
 const run=sql=>execFileSync('sqlite3',[':memory:'],{input:schema+sql,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
 assert.equal(run('SELECT COUNT(*) FROM quest_templates;'),'220');
 assert.throws(()=>run("UPDATE quest_templates SET title='changed' WHERE id='edit-001';"),/base_quests_are_immutable/);
@@ -18,4 +18,6 @@ const mixedPurchases=[1,2,3,4].map(n=>purchase(n).replace("'q'",n===1?"'q'":`'q$
 const attempts=[1,2,3,4].map(n=>generation.replace("'g'",`'g${n}'`).replace("'p1'",`'p${n}'`).replace("'q'",n===1?"'q'":`'q${n}'`).replace("'queued'",`'${['completed','service_failed','queued','queued'][n-1]}'`));
 assert.equal(run(mixedSetup+mixedPurchases+attempts.slice(0,3).join('')+"SELECT COUNT(*) FROM generations WHERE account_id='a';"),'3');
 assert.throws(()=>run(mixedSetup+mixedPurchases+attempts.join('')),/daily_submission_limit/);
-console.log('9 offline SQLite schema/entitlement assertions passed, including mixed types and failed attempts. No app server or remote data used.');
+assert.equal(run(setup+purchase(1)+generation+"SELECT output_policy_version FROM generations WHERE id='g';"),'1');
+assert.equal(run(setup+purchase(1)+generation+"UPDATE generations SET output_policy_version=2 WHERE id='g'; SELECT output_policy_version FROM generations WHERE id='g';"),'2');
+console.log('11 offline SQLite schema/entitlement assertions passed, including output-policy compatibility. No app server or remote data used.');

@@ -5,7 +5,8 @@ import { digest, hmac, base64url } from "./crypto";
 import { inspectMp4, type Upload } from "./media";
 import type { AppEnv } from "./types";
 import { videoRequest, type VideoReference } from "./video-request";
-export type Generation = { id: string; purchase_id: string; account_id: string; quest_id: string; status: string; model: string; resolution: string; duration: number; prompt: string; upload_ids: string; provider_id: string | null; provider_submitted_at: number | null; r2_key: string | null; completed_at: number | null; expires_at: number | null; reference_expires_at: number; aspect?: string };
+import { validOutputDuration } from "./output-policy";
+export type Generation = { id: string; purchase_id: string; account_id: string; quest_id: string; status: string; model: string; resolution: string; duration: number; output_policy_version: number; prompt: string; upload_ids: string; provider_id: string | null; provider_submitted_at: number | null; r2_key: string | null; completed_at: number | null; expires_at: number | null; reference_expires_at: number; aspect?: string };
 export async function referenceToken(env: AppEnv, generationId: string) { return base64url(await hmac(`reference:${generationId}`, env.YETZER_JWT_SECRET)); }
 async function providerJson(env: AppEnv, path: string, body?: unknown) {
   const response = await fetch(`https://openrouter.ai/api/v1/${path}`, { method: body ? "POST" : "GET", headers: { Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "Content-Type": "application/json", "HTTP-Referer": env.APP_URL, "X-Title": "Yetzer" }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(body ? 60000 : 30000) });
@@ -86,8 +87,14 @@ export class GenerationWorkflow extends WorkflowEntrypoint<AppEnv, { generationI
           const bytes = await limitedBytes(output.body!,50 * 1024 * 1024);
           const info = inspectMp4(bytes);
           const shortSide = Math.min(info.width ?? 0,info.height ?? 0);
-          const maxOutputDuration = row.model === ROUTES.adventure.model && row.duration <= 28 ? 28.05 : 30.05;
-          if (info.kind !== "video" || shortSide !== Number.parseInt(row.resolution) || !info.duration || Math.abs(info.duration-row.duration)>1.05 || info.duration<9.95 || info.duration>maxOutputDuration || (row.model.includes("flux-video-edit") && info.duration>15.05)) throw new Error("provider_output_invalid");
+          let sourceDuration: number | null = null;
+          if (row.model === ROUTES.edit.model) {
+            for (const uploadId of JSON.parse(row.upload_ids) as string[]) {
+              const source = await this.env.DB.prepare("SELECT kind,duration FROM uploads WHERE id=? AND account_id=?").bind(uploadId,row.account_id).first<{kind:string;duration:number|null}>();
+              if (source?.kind === "video") sourceDuration = source.duration;
+            }
+          }
+          if (info.kind !== "video" || shortSide !== Number.parseInt(row.resolution) || !validOutputDuration(row,info.duration,sourceDuration)) throw new Error("provider_output_invalid");
           const hash = await crypto.subtle.digest("SHA-256",bytes);
           await this.env.MEDIA.put(key,bytes,{ httpMetadata: { contentType: "video/mp4", cacheControl: "private, no-store" }, sha256: hash, customMetadata: { accountId: row.account_id, generationId: id, expiresAt: String(row.expires_at) } });
         }

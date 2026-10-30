@@ -9,8 +9,12 @@
   the first execution after New York midnight, not at a fixed UTC hour.
 - D1 leases/snapshots retain a published day's board. This release does not
   replace already published quests or invalidate associated purchases.
-- Short plays remain USD 2.99; Adventure becomes USD 11.99. Existing pending
-  checkouts at old prices are rejected rather than silently reused.
+- Short plays remain USD 2.99; Adventure is USD 5.99, advertised as 50% off its
+  previous USD 11.99 price. Unpaid old-price Adventure Checkouts are confirmed
+  with Stripe and expired; already-paid purchases keep their accounting records.
+- Output timing is automatic: Edit follows its source, Perform/Imagine target
+  10-15 seconds, Adventure targets 15-25 seconds with Wan 3.0. No extra AI call
+  is made to choose a duration. See APP.md for validation/versioning details.
 - Existing D1 triggers allow at most three generation records per account per
   New York submission day, regardless of type, quest, outcome or quality.
   One paid purchase can create only one generation record.
@@ -29,6 +33,7 @@ existing inference key. Store any such key only in Worker secrets, never browser
 code, a public health response, source control or operational logs.
 The account balance is not an atomic reservation and may be shared by other apps.
 
+Historical Seedance 2.5 estimate only (not a current Wan 3.0 funding quote):
 For a burst of 20 maximum-length Imagine jobs plus one maximum Adventure, the
 previous token-cost estimate is 20 * 1.3608 + 8.01792 = 35.23392 credits.
 Use an internal rounded reservation of 1.60 credits per short and 9.50 per

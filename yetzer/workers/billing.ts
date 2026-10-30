@@ -38,7 +38,7 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
     "payment_intent_data[metadata][refund_policy]": "no_voluntary_refunds",
     "line_items[0][price_data][currency]": "usd", "line_items[0][price_data][unit_amount]": String(quest.priceCents),
     "line_items[0][price_data][product_data][name]": `Yetzer: ${quest.title}`,
-    "line_items[0][price_data][product_data][description]": `One creative submission. ${quest.kind === "adventure" ? "15-28" : "10-15"}-second output. Non-refundable. Download within 47 hours of completion.`,
+    "line_items[0][price_data][product_data][description]": `${quest.kind === "adventure" ? "One Adventure play." : "One short play."} One creative submission. Non-refundable. Download within 47 hours of completion.`,
     "line_items[0][price_data][product_data][metadata][app]": "yetzer",
     "custom_text[submit][message]": "USDC is available through Crypto when offered by Stripe. Yetzer: one paid creative attempt. No refunds or free new attempts, including for creative dissatisfaction or technical failure. Applicable statutory rights remain.",
     "metadata[quest_title]": quest.title,
@@ -47,6 +47,20 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
   if (typeof session.url !== "string" || !session.url.startsWith("https://checkout.stripe.com/")) throw new HttpError(502, "Checkout did not return a usable link.");
   await env.DB.prepare("UPDATE purchases SET status='pending',checkout_id=?,checkout_url=? WHERE id=? AND status='reserved'").bind(session.id, session.url, requestId).run();
   return { url: session.url, purchaseId: requestId };
+}
+export async function expireOutdatedCheckouts(env: AppEnv) {
+  const outdated = await env.DB.prepare("SELECT p.* FROM purchases p JOIN daily_quests q ON q.id=p.quest_id WHERE p.status='pending' AND p.payment_intent IS NULL AND p.checkout_id IS NOT NULL AND json_extract(q.snapshot,'$.kind')='adventure' AND p.price_cents<>? LIMIT 10").bind(Number(env.LONG_PRICE_CENTS)).all<Purchase>();
+  for (const purchase of outdated.results) {
+    try {
+      const path = `checkout/sessions/${encodeURIComponent(purchase.checkout_id!)}`;
+      let session = await stripe(env,path);
+      if (session.payment_status === "paid" || session.status === "complete") continue;
+      if (session.status === "open") session = await stripe(env,`${path}/expire`,{},`yetzer-expire-old-price-${purchase.id}`);
+      if (session.status === "expired" && session.payment_status !== "paid") {
+        await env.DB.prepare("UPDATE purchases SET status='expired',checkout_url=NULL WHERE id=? AND status='pending' AND payment_intent IS NULL").bind(purchase.id).run();
+      }
+    } catch { /* Keep possibly paid purchases intact when Stripe cannot confirm expiry. */ }
+  }
 }
 export async function markServiceFailure(env: AppEnv, purchaseId: string, code: string) {
   await env.DB.prepare("UPDATE purchases SET status='service_failed',failure_code=? WHERE id=? AND refund_id IS NULL AND status <> 'refunded'").bind(code, purchaseId).run();

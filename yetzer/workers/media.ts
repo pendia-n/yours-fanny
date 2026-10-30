@@ -93,7 +93,7 @@ export function validateUploadDuration(media: Pick<MediaInfo, "kind" | "duration
   const error = mediaDurationError(media.kind, media.duration, questKind);
   if (error) throw new HttpError(400, error);
 }
-export function validateInputs(quest: Quest, uploads: Upload[], requestedDuration?: number) {
+export function validateInputs(quest: Quest, uploads: Upload[]) {
   const unique = new Set(uploads.map(u => u.kind));
   if (unique.size !== uploads.length || uploads.length > 3) throw new HttpError(400, "Use at most one image, one audio clip and one video.");
   const video = uploads.find(u => u.kind === "video"), image = uploads.find(u => u.kind === "image"), audio = uploads.find(u => u.kind === "audio");
@@ -105,9 +105,5 @@ export function validateInputs(quest: Quest, uploads: Upload[], requestedDuratio
   }
   if (quest.kind === "edit" && video && Math.min(video.width ?? 0, video.height ?? 0) !== 720) throw new HttpError(400, "Export your editing clip at 720p first. We do not silently upscale or crop it.");
   if (video && (!video.width || !video.height || !([16/9,9/16].some(ratio => Math.abs(video.width! / video.height! - ratio) < 0.03)))) throw new HttpError(400, "Use a landscape 16:9 or portrait 9:16 video.");
-  const duration = quest.kind === "edit" ? Math.round(video!.duration!) : quest.kind === "perform" ? requestedDuration ?? Math.max(10, Math.round(audio!.duration!)) : requestedDuration;
-  const minOutput = quest.kind === "adventure" ? 15 : 10;
-  const maxOutput = quest.kind === "adventure" ? 28 : 15;
-  if (duration !== undefined && (!Number.isInteger(duration) || duration < minOutput || duration > maxOutput)) throw new HttpError(400, `Choose an output duration of ${minOutput}-${maxOutput} seconds.`);
-  return { duration, aspect: video && video.width! < video.height! ? "9:16" : "16:9" };
+  return { sourceDuration: video?.duration, aspect: video && video.width! < video.height! ? "9:16" : "16:9" };
 }

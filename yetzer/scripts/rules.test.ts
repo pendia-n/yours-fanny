@@ -52,11 +52,11 @@ test('JWT validates expiry, signature and audience',async()=>{
 const upload=(kind:'video'|'image'|'audio',duration:number|null=12):Upload=>({id:kind,account_id:'test',kind,contentType:kind==='video'?'video/mp4':kind==='image'?'image/png':'audio/wav',duration:kind==='image'?null:duration,width:kind==='video'?1280:null,height:kind==='video'?720:null,r2_key:'test',size:100,expires_at:Date.now()+3600000});
 const quest=(kind:string)=>({...QUEST_CATALOG.find(q=>q.kind===kind)!,templateId:'test',day:'2026-10-03',priceCents:999}) as Quest;
 test('route requirements and duration bounds reject unsuitable inputs',()=>{
- assert.equal(validateInputs(quest('edit'),[upload('video')]).duration,12);
+ assert.equal(validateInputs(quest('edit'),[upload('video')]).sourceDuration,12);
  assert.throws(()=>validateInputs(quest('edit'),[upload('video',16)]));assert.throws(()=>validateInputs(quest('edit'),[upload('video'),upload('image')]));
- assert.throws(()=>validateInputs(quest('perform'),[upload('image')]));assert.equal(validateInputs(quest('perform'),[upload('image'),upload('audio')]).duration,12);
+ assert.throws(()=>validateInputs(quest('perform'),[upload('image')]));assert.doesNotThrow(()=>validateInputs(quest('perform'),[upload('image'),upload('audio')]));
  assert.throws(()=>validateInputs(quest('imagine'),[upload('image')]));assert.throws(()=>validateInputs(quest('imagine'),[upload('video',30)]));
- assert.equal(validateInputs(quest('adventure'),[upload('video',30)],28).duration,28);
+ assert.equal(validateInputs(quest('adventure'),[upload('video',30)]).sourceDuration,30);
 });
 test('all video routes submit supported request shapes without a paid generation',()=>{
  for(const kind of ['edit','perform','imagine','adventure']){
