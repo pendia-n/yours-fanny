@@ -4,7 +4,7 @@ import { currentAccount, publicUser } from "../../workers/auth";
 import { ensureDaily, getQuest, serviceReadiness } from "../../workers/quests";
 import { manifestation, myPlays } from "../../workers/api";
 import type { AppEnv } from "../../workers/types";
-import { pagePath, schedule, type Theme } from "./domain";
+import { pagePath, questContinuation, schedule, type Theme } from "./domain";
 export const appEnv = () => bindings as unknown as AppEnv;
 export async function rootData(request: Request) {
   const env = appEnv(), account = await currentAccount(request,env);
@@ -13,7 +13,7 @@ export async function rootData(request: Request) {
 }
 export async function pageData(request: Request) {
   const env=appEnv(),path=pagePath(request.url),account=await currentAccount(request,env);
-  if (["/signin","/signup","/recovery"].includes(path) && account) throw redirect("/quests");
+  if (["/signin","/signup","/recovery"].includes(path) && account) throw redirect(path === "/recovery" ? "/quests" : questContinuation(new URL(request.url).searchParams.get("quest")));
   if (["/profile","/security","/plays"].includes(path) && !account) throw redirect("/signin");
   const base={path,user:account ? publicUser(account) : null,schedule:schedule(),...serviceReadiness(env)};
   if(path === "/quests") return {...base,quests:await ensureDaily(env)};

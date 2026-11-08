@@ -14,6 +14,9 @@ export const ROUTES = {
 } as const;
 export const TIME_ZONE = "America/New_York";
 export const RETENTION_MS = 47 * 60 * 60 * 1000;
+export function questContinuation(id: string | null) {
+  return id && /^\d{4}-\d{2}-\d{2}_(edit|perform|imagine|adventure)-\d{3}$/.test(id) ? `/quests/${id}` : "/quests";
+}
 export function pagePath(requestUrl: string) {
   const pathname = new URL(requestUrl).pathname.replace(/\.data$/, "");
   return pathname.replace(/\/$/, "") || "/";
