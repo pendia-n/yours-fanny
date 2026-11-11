@@ -2,6 +2,7 @@ import { createRequestHandler } from "react-router";
 import { handleApi, maintenance } from "./api";
 import { HttpError, json, type AppEnv } from "./types";
 export { GenerationWorkflow } from "./generation";
+export { GenerationFunding } from "./funding-alarm";
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),

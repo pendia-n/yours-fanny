@@ -30,8 +30,10 @@ quests reduce decision overload; compact instructions make preparation playful.
 - Sunday-Thursday: purchase until 21:00; submit until 23:30.
 - Friday: purchase until 15:30; submit until 16:00. Saturday: no purchase;
   submission reopens 21:00-23:30 for unsubmitted Friday purchases.
-- One account may purchase at most three plays per New York calendar day and
-  submit at most three per day. Repeating one quest requires another purchase.
+- One account may purchase at most three plays per New York calendar day.
+  Repeating one quest requires another purchase. New plays start automatically
+  after Stripe confirms payment, using the materials and consent saved before
+  Checkout. Older tickets without saved materials can still be submitted manually.
 - One purchase grants one creative submission. No free creative rerolls.
 - Provider or delivery failures are service failures, never successful delivery.
 - All successfully delivered films appear in `/manifestation`, grouped by the
@@ -69,7 +71,7 @@ the user's optional text; raw text is retained separately until cleanup.
   Product ID or Price ID is needed. App/payment metadata retains `app=yetzer`.
 - Marketing copy sells the experience, not a specific number of output seconds.
   Required source-media lengths remain explicit beside the upload instructions.
-- Users do not select output seconds. On submission, a versioned SHA-256 hash
+- Users do not select output seconds. After payment confirmation, a versioned SHA-256 hash
   of the purchase ID and quest ID selects an integer target: 10-15 seconds for
   Perform/Imagine, 15-25 seconds for Adventure. The saved target is reused on
   duplicate requests and Workflow recovery; client `duration` values are ignored.
@@ -100,19 +102,26 @@ No invented completed films, user counts, scores, or provider receipts appear.
 ## Infrastructure and launch configuration
 
 - Worker: `yetzer`; D1: `yetzer-db`; private R2: `yetzer-media`.
-- `yetzer-generation` Workflow performs one provider submission, polls, retries
-  delivery of that same result, verifies R2 and sleeps until deletion time.
+- `GenerationFunding` is a Durable Object that checks the OpenRouter account
+  balance after payment. Funded work is dispatched automatically; pending work
+  is checked every 10 seconds while the queue is nonempty. D1 holds prevent
+  concurrent Yetzer jobs from committing the same estimated credits. OpenRouter
+  may still reject a request if another app uses the balance or actual billing
+  differs from the estimate. A confirmed 402 returns that play to the queue.
+- `yetzer-generation` Workflow polls, retries delivery of the same result,
+  verifies R2 and sleeps until deletion. Ambiguous submissions are not retried.
 - A one-minute cron maintains daily releases, the generation outbox, media expiry
-  and unpaid Checkout expiry. No automatic voluntary refunds are issued.
-  D1 leases coordinate daily release creation; no extra Durable Object,
-  Queue or Pipeline is needed for this volume.
+  and unpaid Checkout expiry. Active plays keep their original uploads while
+  pending; they do not need to be re-uploaded after a recharge.
 - Authentication secrets are generated with `openssl rand -hex 32`, persisted
   in ignored code-root `.env`, then uploaded unchanged. Password/passcode hashes
   use PBKDF2-SHA256 with random salts and a separate HMAC pepper.
-- Set `OPENROUTER_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` through
+- Set `OPENROUTER_API_KEY`, `OPENROUTER_MANAGEMENT_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` through
   Worker secrets and change `SALES_ENABLED` to `true` only when ready. Stripe
   webhook URL is `/api/webhooks/stripe`. No real payment or AI test is performed.
-- Apply migration `0004_output_policy.sql` before deploying the new Worker.
+- Apply migration `0005_generation_funding.sql` before deploying the new Worker.
+  Verify that the management key can read the same funded account used by the
+  generation key before deployment. It is separate from the generation key.
   Prices are approved: `SHORT_PRICE_CENTS=299`, `LONG_PRICE_CENTS=599`.
   Purchases still require configured payment/provider secrets and `SALES_ENABLED=true`.
 - Custom-domain linking is left to the owner. Update `APP_URL` to the canonical

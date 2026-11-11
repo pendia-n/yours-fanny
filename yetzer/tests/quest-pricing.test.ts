@@ -82,9 +82,10 @@ test("saved Adventure quests use Wan and current discounted pricing", async () =
 test("UI removes duration controls and the API ignores client-selected timing", () => {
   const page = readFileSync(new URL("../app/routes/page.tsx", import.meta.url), "utf8");
   const api = readFileSync(new URL("../workers/api.ts", import.meta.url), "utf8");
+  const fulfillment = readFileSync(new URL("../workers/fulfillment.ts", import.meta.url), "utf8");
   assert.doesNotMatch(page, /Output duration|setDuration|15-28|One 15-28 second Adventure/);
   assert.match(page, /50% off Adventure/);
   assert.doesNotMatch(api, /body\.duration/);
-  assert.ok(api.includes("automaticDuration(quest.kind,purchase.id,quest.id,input.sourceDuration)"));
-  assert.match(api, /output_policy_version/);
+  assert.ok(fulfillment.includes("automaticDuration(quest.kind,purchase.id,quest.id,input.sourceDuration)"));
+  assert.match(fulfillment, /output_policy_version/);
 });

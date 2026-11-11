@@ -1,10 +1,12 @@
 export interface AppEnv {
   DB: D1Database;
   MEDIA: R2Bucket;
-  GENERATION: Workflow<{ generationId: string }>;
+  GENERATION: Workflow<{ generationId: string; fundingAttempt?: number }>;
+  FUNDING: DurableObjectNamespace<import("./funding-alarm").GenerationFunding>;
   YETZER_JWT_SECRET: string;
   YETZER_PASSWORD_PEPPER: string;
   OPENROUTER_API_KEY?: string;
+  OPENROUTER_MANAGEMENT_KEY?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   APP_URL: string;

@@ -14,6 +14,8 @@
   "d1_databases": [{ "binding": "DB", "database_name": "yetzer-db", "database_id": "b4a10994-ea5e-4c8b-86c2-6feeed60a9c2", "migrations_dir": "migrations" }],
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "yetzer-media" }],
   "workflows": [{ "name": "yetzer-generation", "binding": "GENERATION", "class_name": "GenerationWorkflow" }],
+  "durable_objects": { "bindings": [{ "name": "FUNDING", "class_name": "GenerationFunding" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GenerationFunding"] }],
   "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true },
   "upload_source_maps": true,

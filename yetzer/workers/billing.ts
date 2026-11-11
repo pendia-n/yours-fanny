@@ -2,14 +2,15 @@ import { schedule, submissionDeadline, type Quest } from "../app/lib/domain";
 import { equal, hmac } from "./crypto";
 import { serviceReadiness } from "./quests";
 import { HttpError, json, boundedText, type Account, type AppEnv } from "./types";
-export type Purchase = { id: string; account_id: string; quest_id: string; purchase_day: string; status: string; price_cents: number; checkout_id: string | null; checkout_url: string | null; payment_intent: string | null; expires_at: number; created_at: number };
+import { queuePreparedPurchase, type PreparedPlay } from "./fulfillment";
+export type Purchase = { id: string; account_id: string; quest_id: string; purchase_day: string; status: string; price_cents: number; checkout_id: string | null; checkout_url: string | null; payment_intent: string | null; expires_at: number; created_at: number; prepared_upload_ids?: string | null };
 export async function stripe(env: AppEnv, path: string, values?: Record<string, string>, idempotencyKey?: string) {
   if (!env.STRIPE_SECRET_KEY) throw new HttpError(503, "Payments are not available yet.");
   const response = await fetch(`https://api.stripe.com/v1/${path}`, { method: values ? "POST" : "GET", headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, ...(values ? { "Content-Type": "application/x-www-form-urlencoded" } : {}), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: values ? new URLSearchParams(values) : undefined, signal: AbortSignal.timeout(20000) });
   if (!response.ok) throw new HttpError(502, "Payment service is temporarily unavailable. Your purchase has not been granted.", "payment_service");
   return await response.json() as Record<string, any>;
 }
-export async function createCheckout(env: AppEnv, user: Account, quest: Quest, requestId: string) {
+export async function createCheckout(env: AppEnv, user: Account, quest: Quest, requestId: string, prepared?: PreparedPlay) {
   const time = schedule();
   if (!serviceReadiness(env).salesReady) throw new HttpError(503, "Purchases are not open yet. Generation and payment services must be configured first.");
   if (!time.purchase || time.day !== quest.day) throw new HttpError(409, "Today's purchase window is closed.");
@@ -20,8 +21,20 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
   if (purchase?.checkout_url && purchase.status === "pending") return { url: purchase.checkout_url, purchaseId: purchase.id };
   if (purchase && purchase.status !== "reserved") throw new HttpError(409, "This purchase is already being processed. Check My plays.");
   if (!purchase) {
-    try { await env.DB.prepare("INSERT INTO purchases(id,account_id,quest_id,purchase_day,status,price_cents,created_at,expires_at) VALUES(?,?,?,?,'reserved',?,?,?)").bind(requestId, user.id, quest.id, time.day, quest.priceCents, time.now, submissionDeadline(time.day)).run(); }
+    try {
+      const ids=prepared ? JSON.stringify(prepared.uploadIds) : null;
+      const saved=await env.DB.prepare(`
+        INSERT INTO purchases(id,account_id,quest_id,purchase_day,status,price_cents,created_at,expires_at,prepared_upload_ids,prepared_text)
+        SELECT ?,?,?,?,'reserved',?,?,?,?,?
+        WHERE ? IS NULL OR (SELECT COUNT(*) FROM uploads
+          WHERE account_id=? AND expires_at>? AND id IN (SELECT value FROM json_each(?)))=?
+      `).bind(requestId,user.id,quest.id,time.day,quest.priceCents,time.now,submissionDeadline(time.day),ids,prepared?.rawText ?? null,
+        ids,user.id,time.now+3600000,ids,prepared?.uploadIds.length ?? 0).run();
+      if (saved.meta?.changes===0) throw new HttpError(409,"A prepared file is missing or expired. Select it again before paying.");
+    }
     catch (e) { if (String(e).includes("daily_purchase_limit")) throw new HttpError(409, "You can buy up to three plays per New York day."); throw e; }
+  } else if (prepared && !purchase.prepared_upload_ids) {
+    await env.DB.prepare("UPDATE purchases SET prepared_upload_ids=?,prepared_text=? WHERE id=? AND status='reserved' AND checkout_id IS NULL AND prepared_upload_ids IS NULL").bind(JSON.stringify(prepared.uploadIds),prepared.rawText,requestId).run();
   }
   // Dynamic payment methods include USDC when Stripe approves and enables Crypto.
   // Do not restrict this session to cards; wallet/network selection stays on Stripe.
@@ -40,7 +53,7 @@ export async function createCheckout(env: AppEnv, user: Account, quest: Quest, r
     "line_items[0][price_data][product_data][name]": `Yetzer: ${quest.title}`,
     "line_items[0][price_data][product_data][description]": `${quest.kind === "adventure" ? "One Adventure play." : "One short play."} One creative submission. Non-refundable. Download within 47 hours of completion.`,
     "line_items[0][price_data][product_data][metadata][app]": "yetzer",
-    "custom_text[submit][message]": "USDC is available through Crypto when offered by Stripe. Yetzer: one paid creative attempt. No refunds or free new attempts, including for creative dissatisfaction or technical failure. Applicable statutory rights remain.",
+    "custom_text[submit][message]": "USDC is available through Crypto when offered by Stripe. Huge traffic may delay. Yetzer: one paid creative attempt. No refunds or free new attempts, including for creative dissatisfaction or technical failure. Applicable statutory rights remain.",
     "metadata[quest_title]": quest.title,
     "line_items[0][quantity]": "1", expires_at: String(Math.floor(Date.now() / 1000) + 1800),
   }, `yetzer-checkout-${requestId}`);
@@ -83,11 +96,16 @@ export async function stripeWebhook(request: Request, env: AppEnv) {
     if (!purchase.checkout_id) await env.DB.prepare("UPDATE purchases SET checkout_id=? WHERE id=? AND checkout_id IS NULL").bind(session.id,id).run();
     const paidAt = Number(event.created) * 1000;
     const paidWindow = schedule(paidAt);
-    await env.DB.prepare("UPDATE purchases SET payment_intent=?,paid_at=? WHERE id=? AND payment_intent IS NULL").bind(session.payment_intent,paidAt,id).run();
-    if (!paidWindow.purchase || paidWindow.day !== purchase.purchase_day || Date.now() >= purchase.expires_at || purchase.status === "expired") {
-      await markServiceFailure(env, id, "payment_outside_window");
+    if (purchase.prepared_upload_ids || purchase.status === "submitted") {
+      await env.DB.prepare("UPDATE purchases SET status='paid',payment_intent=COALESCE(payment_intent,?),paid_at=COALESCE(paid_at,?) WHERE id=? AND status IN ('pending','reserved','paid')").bind(session.payment_intent,paidAt,id).run();
+      await queuePreparedPurchase(env,id);
     } else {
-      await env.DB.prepare("UPDATE purchases SET status='paid' WHERE id=? AND status IN ('pending','reserved')").bind(id).run();
+      await env.DB.prepare("UPDATE purchases SET payment_intent=?,paid_at=? WHERE id=? AND payment_intent IS NULL").bind(session.payment_intent,paidAt,id).run();
+      if (!paidWindow.purchase || paidWindow.day !== purchase.purchase_day || Date.now() >= purchase.expires_at || purchase.status === "expired") {
+        await markServiceFailure(env, id, "payment_outside_window");
+      } else {
+        await env.DB.prepare("UPDATE purchases SET status='paid' WHERE id=? AND status IN ('pending','reserved')").bind(id).run();
+      }
     }
   }
   if (["checkout.session.expired", "checkout.session.async_payment_failed"].includes(event.type) && session?.id) {
